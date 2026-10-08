@@ -1,0 +1,92 @@
+[
+  {
+    "id": "q1",
+    "query": "Explain B+ tree insertion algorithm.",
+    "expected_route": "LEARNING",
+    "category": "academic"
+  },
+  {
+    "id": "q2",
+    "query": "What is normalization in DBMS and how do 1NF, 2NF, 3NF differ?",
+    "expected_route": "LEARNING",
+    "category": "academic"
+  },
+  {
+    "id": "q3",
+    "query": "How does BFS graph traversal work step-by-step?",
+    "expected_route": "LEARNING",
+    "category": "academic"
+  },
+  {
+    "id": "q4",
+    "query": "What are the core differences between TCP and UDP transport protocols?",
+    "expected_route": "LEARNING",
+    "category": "academic"
+  },
+  {
+    "id": "q5",
+    "query": "Can you explain how virtual memory paging prevents fragmentation?",
+    "expected_route": "LEARNING",
+    "category": "academic"
+  },
+  {
+    "id": "q6",
+    "query": "What skills am I missing for a senior backend engineer job?",
+    "expected_route": "CAREER",
+    "category": "career"
+  },
+  {
+    "id": "q7",
+    "query": "Compare my resume with this machine learning job description.",
+    "expected_route": "CAREER",
+    "category": "career"
+  },
+  {
+    "id": "q8",
+    "query": "What years of experience and programming languages are listed on my resume?",
+    "expected_route": "CAREER",
+    "category": "career"
+  },
+  {
+    "id": "q9",
+    "query": "How should I highlight distributed systems experience for an upcoming FAANG interview?",
+    "expected_route": "CAREER",
+    "category": "career"
+  },
+  {
+    "id": "q10",
+    "query": "Does my resume satisfy the qualifications required by TechCorp?",
+    "expected_route": "CAREER",
+    "category": "career"
+  },
+  {
+    "id": "q11",
+    "query": "Why did I choose Firebase over PostgreSQL in my personal expense tracker app?",
+    "expected_route": "PROJECT",
+    "category": "project"
+  },
+  {
+    "id": "q12",
+    "query": "Explain the architectural layers of my real-time chat application project.",
+    "expected_route": "PROJECT",
+    "category": "project"
+  },
+  {
+    "id": "q13",
+    "query": "What microservices and database technologies are used in my portfolio project?",
+    "expected_route": "PROJECT",
+    "category": "project"
+  },
+  {
+    "id": "q14",
+    "query": "What is the capital city of France and its historical origins?",
+    "expected_route": "GENERAL",
+    "category": null
+  },
+  {
+    "id": "q15",
+    "query": "What is the approximate speed of sound in dry air at room temperature?",
+    "expected_route": "GENERAL",
+    "category": null
+  }
+]

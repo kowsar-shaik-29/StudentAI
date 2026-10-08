@@ -2,7 +2,7 @@
   "version": "1.0",
   "k1": 1.5,
   "b": 0.75,
-  "total_docs": 40,
+  "total_docs": 41,
   "documents": [
     {
       "chunk_id": "computer_networking_notes.pdf_p4_c2",
@@ -514,7 +514,7 @@
       "page_number": 1,
       "total_pages": 1,
       "file_name": "database_guide.pdf",
-      "file_path": "C:\\Users\\allah\\AppData\\Local\\Temp\\tmpl216pqzu\\database_guide.pdf",
+      "file_path": "C:\\Users\\allah\\AppData\\Local\\Temp\\tmp3qgxb3mf\\database_guide.pdf",
       "chunk_index": 0,
       "char_count": 59,
       "document_id": "9b34affb-991b-546b-875c-a011e24b5ba7",
@@ -528,7 +528,7 @@
       "page_number": 1,
       "total_pages": 1,
       "file_name": "networking_guide.pdf",
-      "file_path": "C:\\Users\\allah\\AppData\\Local\\Temp\\tmpyounze72\\networking_guide.pdf",
+      "file_path": "C:\\Users\\allah\\AppData\\Local\\Temp\\tmpzf5hy3kj\\networking_guide.pdf",
       "chunk_index": 0,
       "char_count": 50,
       "document_id": "70e6f734-cd7d-513d-87be-73d0be1a0bd4",
@@ -563,6 +563,20 @@
       "category": "career",
       "subject": "career",
       "document_type": "job_description"
+    },
+    {
+      "chunk_id": "sample_project.pdf_p1_c0",
+      "text": "STUDENT PROJECT: Expense Tracker Application\nArchitecture & System Design:\nThe application uses React on the frontend and FastAPI on the backend.\nFirebase Authentication handles user identity management and OAuth logins.\nMongoDB is used for document-oriented receipt data storage.\nDocker containers deploy the microservices on AWS ECS.",
+      "page_number": 1,
+      "total_pages": 1,
+      "file_name": "sample_project.pdf",
+      "file_path": "C:\\Users\\allah\\Downloads\\OneDrive\\Desktop\\StudentAI\\data\\sample_docs\\sample_project.pdf",
+      "chunk_index": 0,
+      "char_count": 335,
+      "document_id": "d22a5a5f-dd92-5451-8615-7448aa01f625",
+      "category": "project",
+      "subject": "project",
+      "document_type": "project_documentation"
     }
   ]
 }

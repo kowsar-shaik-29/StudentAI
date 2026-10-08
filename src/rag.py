@@ -20,7 +20,7 @@ from google import genai
 from src.retriever import search
 from src.hybrid_retriever import hybrid_search
 from src.context_builder import build_context
-from src.generator import generate_answer
+from src.generator import generate_answer, get_genai_client
 from src.vector_store import initialize_vector_store
 from src.sparse_retriever import SparseRetriever
 
@@ -169,5 +169,85 @@ def answer_question(
         "answer": answer_text,
         "sources": sources,
     }
+
+
+def answer_question_auto(
+    query: str,
+    top_k: int = 5,
+    client: Optional[qdrant_client.QdrantClient] = None,
+    genai_client: Optional[genai.Client] = None,
+    collection_name: Optional[str] = None,
+    confidence_threshold: float = 0.70,
+    sparse_retriever: Optional[SparseRetriever] = None,
+) -> Dict[str, Any]:
+    """
+    Executes automated query routing and grounded RAG answer generation.
+    Pipeline:
+      Query -> Query Router -> Domain Route -> Category Filter -> Hybrid Retrieval -> Context -> Grounded Answer.
+
+    Args:
+        query: User question or query string.
+        top_k: Number of relevant context chunks to retrieve.
+        client: Optional pre-initialized QdrantClient.
+        genai_client: Optional pre-authenticated GenAI client.
+        collection_name: Optional Qdrant collection override.
+        confidence_threshold: Minimum confidence for domain route before falling back to GENERAL.
+        sparse_retriever: Optional SparseRetriever instance.
+
+    Returns:
+        Structured response dictionary:
+        {
+            "question": str,
+            "route": str,
+            "confidence": float,
+            "reason": str,
+            "category_filter": Optional[str],
+            "answer": str,
+            "sources": List[Dict[str, Any]],
+        }
+    """
+    if not query or not query.strip():
+        raise ValueError("Query cannot be empty or whitespace only")
+
+    from src.query_router import route_query, get_category_filter_for_route
+
+    clean_query = query.strip()
+    g_client = genai_client or get_genai_client()
+
+    # 1. Route Query
+    routing_result = route_query(
+        clean_query,
+        client=g_client,
+        confidence_threshold=confidence_threshold,
+    )
+    route = routing_result["route"]
+    confidence = routing_result["confidence"]
+    reason = routing_result["reason"]
+
+    # 2. Derive Category Filter from Route
+    category_filter = get_category_filter_for_route(route)
+
+    # 3. Execute Grounded RAG with Hybrid Retrieval and Route Category Filter
+    rag_result = answer_question(
+        question=clean_query,
+        top_k=top_k,
+        client=client,
+        genai_client=g_client,
+        collection_name=collection_name,
+        hybrid=True,
+        sparse_retriever=sparse_retriever,
+        category=category_filter,
+    )
+
+    return {
+        "question": clean_query,
+        "route": route,
+        "confidence": confidence,
+        "reason": reason,
+        "category_filter": category_filter,
+        "answer": rag_result["answer"],
+        "sources": rag_result["sources"],
+    }
+
 
 
