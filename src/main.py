@@ -51,6 +51,10 @@ from src.learning_analytics import (
     get_topic_statistics,
     get_subtopic_statistics,
 )
+from src.recommendation_engine import (
+    get_learning_recommendations,
+    get_learning_profile,
+)
 
 
 
@@ -655,6 +659,100 @@ def cmd_record_quiz(
         sys.exit(1)
 
 
+def cmd_recommendations(limit: int = 5, topic: Optional[str] = None) -> None:
+    """Displays personalized learning recommendations."""
+    recs_res = get_learning_recommendations(max_recommendations=limit, topic=topic)
+    print("=" * 70)
+    print("STUDENTAI PERSONALIZED RECOMMENDATIONS")
+    print("=" * 70)
+
+    if recs_res.get("message") and not recs_res.get("recommendations"):
+        print(f"\n{recs_res['message']}\n")
+        print("=" * 70)
+        return
+
+    recs = recs_res.get("recommendations", [])
+    if not recs:
+        print("\nNo recommendations available.\n")
+        print("=" * 70)
+        return
+
+    print()
+    for r in recs:
+        print(f"{r['rank']}. {r['topic']} / {r['subtopic']}")
+        print(f"   Priority: {r['priority']}")
+        print(f"   Reason:   {r['reason']}")
+        print(f"   Action:   {r['recommended_action']}")
+        if r.get("source_documents"):
+            print(f"   Sources:  {', '.join(r['source_documents'])}")
+        else:
+            print("   Sources:  None (No supporting academic document found)")
+        print()
+    print("=" * 70)
+
+
+def cmd_learning_profile() -> None:
+    """Displays structured personalized learning profile."""
+    profile = get_learning_profile()
+    print("=" * 70)
+    print("STUDENTAI PERSONALIZED LEARNING PROFILE")
+    print("=" * 70)
+
+    # 1. Weak Topics
+    weak_list = profile.get("weak_topics", [])
+    if weak_list:
+        print("\nWeak Topics")
+        print("-" * 70)
+        for idx, w in enumerate(weak_list, start=1):
+            acc_str = f"{w['accuracy'] * 100:.0f}%" if w["accuracy"] is not None else "N/A"
+            print(f"{idx}. {w['topic']} / {w['subtopic']}")
+            print(f"   Accuracy: {acc_str}")
+            print(f"   Weakness: {w['weakness_level']} (Score: {w['weakness_score']:.2f})")
+            print()
+
+    # 2. Strong Topics
+    strong_list = profile.get("strong_topics", [])
+    if strong_list:
+        print("\nStrong Topics")
+        print("-" * 70)
+        for idx, s in enumerate(strong_list, start=1):
+            acc_str = f"{s['accuracy'] * 100:.0f}%" if s["accuracy"] is not None else "N/A"
+            print(f"{idx}. {s['topic']} / {s['subtopic']}")
+            print(f"   Accuracy: {acc_str}")
+            print(f"   Weakness: {s['weakness_level']} (Score: {s['weakness_score']:.2f})")
+            print()
+
+    # 3. Insufficient Data Topics
+    insufficient_list = profile.get("insufficient_data_topics", [])
+    if insufficient_list:
+        print("\nInsufficient Data (Needs Assessment)")
+        print("-" * 70)
+        for idx, item in enumerate(insufficient_list, start=1):
+            print(f"{idx}. {item['topic']} / {item['subtopic']}")
+            print("   Status:   No quiz history (Interactions recorded)")
+            print()
+
+    # 4. Recommendations
+    recs = profile.get("recommendations", [])
+    print("\nActionable Recommendations")
+    print("-" * 70)
+    if not recs:
+        if profile.get("message"):
+            print(f"{profile['message']}")
+        else:
+            print("No recommendations available.")
+    else:
+        for r in recs:
+            print(f"{r['rank']}. {r['topic']} / {r['subtopic']}")
+            print(f"   Priority: {r['priority']}")
+            print(f"   Action:   {r['recommended_action']}")
+            if r.get("source_documents"):
+                print(f"   Sources:  {', '.join(r['source_documents'])}")
+            print()
+
+    print("=" * 70)
+
+
 def cmd_evaluate(
     eval_file: str = "data/evaluation/rag_eval.json",
     top_k: int = 5,
@@ -877,6 +975,14 @@ def main():
     quiz_parser.add_argument("--correct", type=int, required=True, help="Total questions answered correctly")
     quiz_parser.add_argument("--incorrect", type=int, required=True, help="Total questions answered incorrectly")
 
+    # Recommendations command (Step 16: Personalized Learning Recommendations)
+    recs_parser = subparsers.add_parser("recommendations", help="Display actionable personalized learning recommendations")
+    recs_parser.add_argument("--limit", type=int, default=5, help="Maximum number of recommendations (default: 5)")
+    recs_parser.add_argument("--topic", type=str, default=None, help="Filter recommendations down to a specific topic")
+
+    # Learning-profile command (Step 16: Personalized Learning Profile)
+    subparsers.add_parser("learning-profile", help="Display structured personalized learning profile")
+
     # Evaluate command (Step 11)
     eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
     eval_parser.add_argument("--file", type=str, default="data/evaluation/rag_eval.json", help="Path to evaluation dataset")
@@ -948,6 +1054,10 @@ def main():
             correct=args.correct,
             incorrect=args.incorrect,
         )
+    elif args.command == "recommendations":
+        cmd_recommendations(limit=args.limit, topic=args.topic)
+    elif args.command == "learning-profile":
+        cmd_learning_profile()
     elif args.command == "evaluate":
         cmd_evaluate(
             eval_file=args.file,
