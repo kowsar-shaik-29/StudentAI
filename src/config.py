@@ -29,7 +29,7 @@ class Settings:
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "768"))
 
     # Generation Model (Gemini 2.5 Flash offers strong reasoning with low latency)
-    generation_model: str = os.getenv("GEMINI_GENERATION_MODEL", "gemini-2.5-flash")
+    generation_model: str = os.getenv("GEMINI_GENERATION_MODEL", "gemini-3-flash-preview")
 
     # Qdrant Storage Configuration
     # Local persistent folder path (does not require Docker)

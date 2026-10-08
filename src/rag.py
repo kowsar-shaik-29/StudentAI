@@ -1,0 +1,111 @@
+"""
+End-to-End RAG Pipeline Module.
+Coordinates semantic retrieval, context formulation, and grounded answer generation.
+
+Core Pipeline:
+Question
+   ?
+Semantic Retrieval (src.retriever.search)
+   ?
+Context Assembly (src.context_builder.build_context)
+   ?
+Grounded LLM Generation (src.generator.generate_answer)
+   ?
+Structured Answer + Cited Sources
+"""
+
+from typing import Dict, Any, Optional
+import qdrant_client
+from google import genai
+from src.retriever import search
+from src.context_builder import build_context
+from src.generator import generate_answer
+from src.vector_store import initialize_vector_store
+
+
+def answer_question(
+    question: str,
+    top_k: int = 5,
+    client: Optional[qdrant_client.QdrantClient] = None,
+    genai_client: Optional[genai.Client] = None,
+    collection_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Executes complete end-to-end RAG pipeline for a given user question.
+
+    Args:
+        question: User query string (must be non-empty)
+        top_k: Number of relevant context chunks to retrieve
+        client: Optional pre-initialized QdrantClient
+        genai_client: Optional pre-authenticated GenAI client
+        collection_name: Optional Qdrant collection override
+
+    Returns:
+        Structured dictionary containing:
+        {
+            "question": str,
+            "answer": str,
+            "sources": [
+                {
+                    "score": float,
+                    "file_name": str,
+                    "page_number": int,
+                    "chunk_id": str,
+                    "text": str,
+                }, ...
+            ]
+        }
+
+    Raises:
+        ValueError: If question is empty or top_k is invalid.
+        RuntimeError: If retrieval or generation fails.
+    """
+    if not question or not question.strip():
+        raise ValueError("Question cannot be empty or whitespace only")
+
+    if not isinstance(top_k, int) or top_k <= 0:
+        raise ValueError(f"top_k must be a positive integer greater than 0, got {top_k}")
+
+    clean_question = question.strip()
+    q_client = client or initialize_vector_store()
+
+    try:
+        # Step 1: Semantic Retrieval
+        retrieved_chunks = search(
+            query=clean_question,
+            top_k=top_k,
+            client=q_client,
+            collection_name=collection_name,
+        )
+    finally:
+        # Close client only if created locally inside this function
+        if client is None:
+            q_client.close()
+
+    # Step 2: Assemble Context
+    context_str = build_context(retrieved_chunks)
+
+    # Step 3: Generate Grounded Answer
+    answer_text = generate_answer(
+        question=clean_question,
+        context=context_str,
+        client=genai_client,
+    )
+
+    # Step 4: Package clean sources (excluding raw vectors)
+    sources = [
+        {
+            "score": item["score"],
+            "file_name": item["file_name"],
+            "page_number": item["page_number"],
+            "chunk_id": item["chunk_id"],
+            "text": item["text"],
+        }
+        for item in retrieved_chunks
+    ]
+
+    return {
+        "question": clean_question,
+        "answer": answer_text,
+        "sources": sources,
+    }
