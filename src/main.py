@@ -1,12 +1,12 @@
 """
 CLI Entry Point for StudentAI.
-Provides commands to inspect configuration, extract PDF text, chunk documents, ingest, and query.
+Provides commands to inspect configuration, extract PDF text, chunk documents, index vectors, and query.
 
 Usage:
   python -m src.main status
-  python -m src.main extract <path-to-pdf> [--preview-chars 250] [--max-pages 5]
-  python -m src.main chunk <path-to-pdf> [--chunk-size 1000] [--overlap 200]
-  python -m src.main ingest <path-to-pdf>
+  python -m src.main extract <path-to-pdf>
+  python -m src.main chunk <path-to-pdf>
+  python -m src.main index <path-to-pdf>
   python -m src.main query "Your question here"
 """
 
@@ -24,48 +24,57 @@ if sys.platform == "win32":
 
 from src.config import get_settings, require_api_key
 from src.extractor import extract_pdf, extract_pdf_pages
-from src.chunker import create_chunks, chunk_pages
-from src.embedder import embed_batch, get_genai_client
-from src.vector_store import get_qdrant_client, init_collection, upsert_chunks
+from src.chunker import create_chunks
+from src.embedder import embed_chunks, get_genai_client
+from src.vector_store import (
+    initialize_vector_store,
+    ensure_collection,
+    upsert_chunks,
+    count_vectors,
+    get_collection_info,
+)
 from src.retriever import retrieve_context
 from src.generator import generate_rag_answer
 
 
 def cmd_status() -> None:
-    """Checks configuration and local database status."""
+    """Checks configuration and local Qdrant database status."""
     settings = get_settings()
     print("=" * 60)
-    print("StudentAI - Phase 1 Environment Status")
+    print("StudentAI - System & Vector Store Status")
     print("=" * 60)
-    print(f"Embedding Model:    {settings.embedding_model} (Dim: {settings.embedding_dim})")
+    print(f"Embedding Model:    {settings.embedding_model}")
+    print(f"Embedding Dim:      {settings.embedding_dim}")
     print(f"Generation Model:   {settings.generation_model}")
-    print(f"Qdrant Path:        {settings.qdrant_storage_path}")
+    print(f"Qdrant Storage:     {settings.qdrant_storage_path}")
     print(f"Collection Name:    {settings.qdrant_collection_name}")
     print(f"Chunk Size/Overlap: {settings.chunk_size} / {settings.chunk_overlap} chars")
 
-    # Check API key configuration without printing it
+    # API Key status
     if settings.gemini_api_key and settings.gemini_api_key != "your_gemini_api_key_here":
         masked_key = settings.gemini_api_key[:4] + "..." + settings.gemini_api_key[-4:]
         print(f"Gemini API Key:     Configured ({masked_key})")
     else:
         print("Gemini API Key:     [NOT CONFIGURED] (Set GEMINI_API_KEY in .env)")
 
-    # Check local Qdrant collection
+    # Qdrant collection status
     try:
-        q_client = get_qdrant_client()
-        collections = [c.name for c in q_client.get_collections().collections]
-        print(f"Qdrant Collections: {collections if collections else 'None (Collection not yet created)'}")
+        q_client = initialize_vector_store()
+        info = get_collection_info(q_client)
+        if info["exists"]:
+            print(f"Collection Status:  Active (Status: {info.get('status', 'Ready')})")
+            print(f"Stored Vectors:     {info['points_count']}")
+            print(f"Vector Dimension:   {info['vector_size']} (Distance: {info['distance']})")
+        else:
+            print("Collection Status:  Not yet created (0 vectors)")
         q_client.close()
     except Exception as e:
-        print(f"Qdrant Status:      Error accessing local store: {e}")
+        print(f"Qdrant Status:      Error accessing store: {e}")
     print("=" * 60)
 
 
 def cmd_extract(pdf_path: str, preview_chars: int = 250, max_pages_preview: int = 5) -> None:
-    """
-    Step 2: Extracts text page-by-page from a PDF and displays a concise preview.
-    Does NOT call any LLM, generate embeddings, or write to Qdrant.
-    """
+    """Extracts text page-by-page from a PDF and displays a concise preview."""
     path = Path(pdf_path)
     print("=" * 60)
     print(f"Extracting PDF: {path.name}")
@@ -108,10 +117,7 @@ def cmd_extract(pdf_path: str, preview_chars: int = 250, max_pages_preview: int 
 
 
 def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview_count: int = 5) -> None:
-    """
-    Step 3: Chunks extracted PDF pages and displays concise metrics and previews.
-    Does NOT call any LLM, generate embeddings, or write to Qdrant.
-    """
+    """Chunks extracted PDF pages and displays concise metrics and previews."""
     path = Path(pdf_path)
     print("=" * 60)
     print(f"Chunking Document: {path.name}")
@@ -128,16 +134,13 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
     total_chunks = len(chunks)
 
     if total_chunks == 0:
-        print(f"No chunks generated (document may be empty).")
+        print("No chunks generated (document may be empty).")
         return
 
-    # Compute statistics
     char_counts = [c["char_count"] for c in chunks]
     avg_chunk_size = sum(char_counts) / total_chunks
     min_chunk_size = min(char_counts)
     max_chunk_size = max(char_counts)
-
-    # Chunks per page distribution
     chunks_per_page = Counter(c["page_number"] for c in chunks)
 
     print(f"File:               {path.name}")
@@ -150,11 +153,9 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
     print("-" * 60)
     print("Chunks per Page:")
     for page_num in sorted(chunks_per_page.keys()):
-        count = chunks_per_page[page_num]
-        print(f"  Page {page_num:2d}: {count} chunk(s)")
+        print(f"  Page {page_num:2d}: {chunks_per_page[page_num]} chunk(s)")
     print("-" * 60)
 
-    # Preview first few chunks
     show_count = min(total_chunks, preview_count)
     print(f"Previewing first {show_count} chunk(s):\n")
     for i in range(show_count):
@@ -162,7 +163,6 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
         preview_text = c["text"][:200].replace("\r", "").replace("\n", " ")
         if len(c["text"]) > 200:
             preview_text += "..."
-
         print(f"Chunk {i + 1}:")
         print(f"  ID:           {c['chunk_id']}")
         print(f"  Page:         {c['page_number']}")
@@ -175,33 +175,57 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
     print("Chunking completed successfully.")
 
 
-def cmd_ingest(pdf_path: str) -> None:
-    """Executes PDF extraction -> chunking -> embedding -> Qdrant storage."""
+def cmd_index(pdf_path: str) -> None:
+    """
+    Step 5: Executes full indexing pipeline:
+    PDF -> extract -> chunk -> embed -> store in local Qdrant.
+    """
     require_api_key()
     settings = get_settings()
+    path = Path(pdf_path)
 
-    print(f"[1/4] Extracting text from: {pdf_path}")
-    pages = extract_pdf_pages(pdf_path)
-    print(f"      Extracted {len(pages)} pages with text.")
+    print("=" * 60)
+    print(f"Indexing Document: {path.name}")
+    print("=" * 60)
 
+    # 1. Extraction
+    print(f"[1/4] Extracting text from: {path.name}")
+    pages = extract_pdf(path, include_empty=True)
+    pages_with_text = sum(1 for p in pages if p["has_text"])
+    print(f"      Extracted {len(pages)} pages ({pages_with_text} with text).")
+
+    # 2. Chunking
     print(f"[2/4] Chunking pages (size={settings.chunk_size}, overlap={settings.chunk_overlap})...")
     chunks = create_chunks(pages, chunk_size=settings.chunk_size, overlap=settings.chunk_overlap)
     print(f"      Created {len(chunks)} chunks.")
 
-    print(f"[3/4] Generating embeddings using {settings.embedding_model}...")
-    texts_to_embed = [c["text"] for c in chunks]
-    genai_client = get_genai_client()
-    embeddings = embed_batch(texts_to_embed, client=genai_client)
-    print(f"      Generated {len(embeddings)} vectors.")
+    # 3. Embedding
+    print(f"[3/4] Generating embeddings using {settings.embedding_model} (dim={settings.embedding_dim})...")
+    enriched_chunks = embed_chunks(chunks, batch_size=20)
+    print(f"      Generated {len(enriched_chunks)} vector embeddings.")
 
-    print(f"[4/4] Upserting vectors into Qdrant collection '{settings.qdrant_collection_name}'...")
-    q_client = get_qdrant_client()
+    # 4. Storage in local Qdrant
+    print(f"[4/4] Storing vectors in Qdrant collection '{settings.qdrant_collection_name}'...")
+    q_client = initialize_vector_store()
     try:
-        init_collection(q_client)
-        count = upsert_chunks(q_client, chunks, embeddings)
-        print(f"      Successfully stored {count} chunks in Qdrant!")
+        stored_count = upsert_chunks(q_client, enriched_chunks)
+        total_in_collection = count_vectors(q_client)
     finally:
         q_client.close()
+
+    print("=" * 60)
+    print("INDEXING SUMMARY:")
+    print("=" * 60)
+    print(f"Document:         {path.name}")
+    print(f"Pages:            {len(pages)}")
+    print(f"Chunks:           {len(chunks)}")
+    print(f"Embeddings:       {len(enriched_chunks)}")
+    print(f"Vectors stored:   {stored_count}")
+    print(f"Collection:       {settings.qdrant_collection_name}")
+    print(f"Vector dimension: {settings.embedding_dim}")
+    print(f"Total in DB:      {total_in_collection}")
+    print("=" * 60)
+    print("Indexing completed successfully!")
 
 
 def cmd_query(question: str, top_k: int = 4) -> None:
@@ -210,7 +234,7 @@ def cmd_query(question: str, top_k: int = 4) -> None:
 
     print(f"Question: {question}")
     print(f"[1/2] Retrieving top {top_k} relevant passages from Qdrant...")
-    q_client = get_qdrant_client()
+    q_client = initialize_vector_store()
     try:
         context_chunks = retrieve_context(question, top_k=top_k, client=q_client)
     finally:
@@ -240,7 +264,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Status command
-    subparsers.add_parser("status", help="Check configuration and local database status")
+    subparsers.add_parser("status", help="Check configuration and local vector database status")
 
     # Extract command (Step 2)
     extract_parser = subparsers.add_parser("extract", help="Extract and preview text from a PDF without embeddings or LLM")
@@ -254,8 +278,12 @@ def main():
     chunk_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in characters")
     chunk_parser.add_argument("--overlap", type=int, default=200, help="Chunk overlap in characters")
 
-    # Ingest command
-    ingest_parser = subparsers.add_parser("ingest", help="Ingest and index a PDF file")
+    # Index command (Step 5)
+    index_parser = subparsers.add_parser("index", help="Extract, chunk, embed, and index a PDF into Qdrant")
+    index_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+
+    # Ingest command (alias to index)
+    ingest_parser = subparsers.add_parser("ingest", help="Alias for index")
     ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
 
     # Query command
@@ -271,8 +299,8 @@ def main():
         cmd_extract(args.pdf_path, preview_chars=args.preview_chars, max_pages_preview=args.max_pages)
     elif args.command == "chunk":
         cmd_chunk(args.pdf_path, chunk_size=args.chunk_size, overlap=args.overlap)
-    elif args.command == "ingest":
-        cmd_ingest(args.pdf_path)
+    elif args.command in ("index", "ingest"):
+        cmd_index(args.pdf_path)
     elif args.command == "query":
         cmd_query(args.question, top_k=args.top_k)
     else:
