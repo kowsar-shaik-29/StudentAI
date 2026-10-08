@@ -38,6 +38,7 @@ from src.retriever import search
 from src.sparse_retriever import get_sparse_retriever
 from src.hybrid_retriever import hybrid_search
 from src.rag import answer_question, answer_question_auto
+from src.learning_rag import answer_learning_question
 from src.ingestion import ingest_document, ingest_directory
 from src.evaluator import evaluate_retrieval_mode
 from src.generation_evaluator import evaluate_generation_pipeline
@@ -482,6 +483,66 @@ def cmd_ask_auto(
     print("=" * 60)
 
 
+def cmd_learn(
+    question: str,
+    top_k: int = 5,
+    intent: Optional[str] = None,
+    threshold: float = 0.70,
+) -> None:
+    """Executes Learning RAG with intent routing and academic domain isolation."""
+    require_api_key()
+
+    clean_question = question.strip()
+    result = answer_learning_question(
+        query=clean_question,
+        top_k=top_k,
+        intent=intent,
+        confidence_threshold=threshold,
+    )
+
+    print("=" * 60)
+    print("STUDENTAI LEARNING")
+    print("=" * 60)
+    print(f"\nQuestion:\n{clean_question}\n")
+    print(f"Intent:\n{result['intent']}\n")
+    print(f"Confidence:\n{result['confidence']:.2f}\n")
+    if result.get("reason"):
+        print(f"Reason:\n{result['reason']}\n")
+
+    if result["intent"] == "QUIZ":
+        print("-" * 60)
+        print("PRACTICE QUIZ QUESTIONS")
+        print("-" * 60)
+        questions = result.get("questions", [])
+        if not questions:
+            print("No practice questions could be generated from the available academic notes.")
+        else:
+            for idx, q_item in enumerate(questions, start=1):
+                diff = q_item.get("difficulty", "medium").upper()
+                print(f"Q{idx} [{diff}]: {q_item.get('question')}")
+        print()
+    else:
+        print("-" * 60)
+        print("ANSWER")
+        print("-" * 60)
+        print(result["answer"])
+        print()
+
+    print("-" * 60)
+    print("SOURCES")
+    print("-" * 60)
+    for i, src in enumerate(result["sources"], start=1):
+        print(f"{i}. {src['file_name']}")
+        print(f"   Page:     {src['page_number']}")
+        print(f"   Category: {src.get('category', 'academic')}")
+        print(f"   Subject:  {src.get('subject', 'general')}")
+        print(f"   Score:    {src['score']:.4f}")
+        print(f"   Chunk:    {src['chunk_id']}")
+        print()
+
+    print("=" * 60)
+
+
 def cmd_evaluate(
     eval_file: str = "data/evaluation/rag_eval.json",
     top_k: int = 5,
@@ -681,6 +742,13 @@ def main():
     ask_auto_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
     ask_auto_parser.add_argument("--threshold", type=float, default=0.70, help="Confidence threshold to accept route (default: 0.70)")
 
+    # Learn command (Step 14: Learning RAG)
+    learn_parser = subparsers.add_parser("learn", help="Ask an academic question with pedagogical intent classification (explain, summarize, compare, quiz, exam-answer)")
+    learn_parser.add_argument("question", type=str, help="Academic question, concept, or topic")
+    learn_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
+    learn_parser.add_argument("--intent", type=str, default=None, choices=["EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING"], help="Explicitly specify learning intent override")
+    learn_parser.add_argument("--threshold", type=float, default=0.70, help="Confidence threshold to accept intent (default: 0.70)")
+
     # Evaluate command (Step 11)
     eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
     eval_parser.add_argument("--file", type=str, default="data/evaluation/rag_eval.json", help="Path to evaluation dataset")
@@ -731,6 +799,13 @@ def main():
         cmd_ask_auto(
             args.question,
             top_k=args.top_k,
+            threshold=args.threshold,
+        )
+    elif args.command == "learn":
+        cmd_learn(
+            args.question,
+            top_k=args.top_k,
+            intent=args.intent,
             threshold=args.threshold,
         )
     elif args.command == "evaluate":

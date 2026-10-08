@@ -1,0 +1,102 @@
+[
+  {
+    "id": "l1",
+    "query": "Explain B+ tree insertion algorithm step by step.",
+    "expected_intent": "EXPLAIN"
+  },
+  {
+    "id": "l2",
+    "query": "How does BFS graph traversal explore vertices level by level?",
+    "expected_intent": "EXPLAIN"
+  },
+  {
+    "id": "l3",
+    "query": "Teach me database normalization with relational examples.",
+    "expected_intent": "EXPLAIN"
+  },
+  {
+    "id": "l4",
+    "query": "What is star topology and how do packet collisions get handled?",
+    "expected_intent": "EXPLAIN"
+  },
+  {
+    "id": "l5",
+    "query": "Summarize my DBMS notes into concise bullet points.",
+    "expected_intent": "SUMMARIZE"
+  },
+  {
+    "id": "l6",
+    "query": "Give me a quick revision recap of the computer networking chapters.",
+    "expected_intent": "SUMMARIZE"
+  },
+  {
+    "id": "l7",
+    "query": "Can you provide a high-level summary of transaction management?",
+    "expected_intent": "SUMMARIZE"
+  },
+  {
+    "id": "l8",
+    "query": "TL;DR summary of routing algorithms and subnetting formulas.",
+    "expected_intent": "SUMMARIZE"
+  },
+  {
+    "id": "l9",
+    "query": "Compare TCP and UDP transport layer protocols.",
+    "expected_intent": "COMPARE"
+  },
+  {
+    "id": "l10",
+    "query": "What are the core differences between 2NF and 3NF normal forms?",
+    "expected_intent": "COMPARE"
+  },
+  {
+    "id": "l11",
+    "query": "Compare primary keys vs foreign keys in relational database design.",
+    "expected_intent": "COMPARE"
+  },
+  {
+    "id": "l12",
+    "query": "How do star topology and mesh topology differ in terms of cabling and fault tolerance?",
+    "expected_intent": "COMPARE"
+  },
+  {
+    "id": "l13",
+    "query": "Give me a 5-mark exam-ready answer on database normalization.",
+    "expected_intent": "EXAM_ANSWER"
+  },
+  {
+    "id": "l14",
+    "query": "Write a 10-mark model answer explaining ACID properties with definitions and points.",
+    "expected_intent": "EXAM_ANSWER"
+  },
+  {
+    "id": "l15",
+    "query": "Provide a high-scoring university exam answer on TCP three-way handshake.",
+    "expected_intent": "EXAM_ANSWER"
+  },
+  {
+    "id": "l16",
+    "query": "Draft an exam answer explaining star topology with its advantages and limitations.",
+    "expected_intent": "EXAM_ANSWER"
+  },
+  {
+    "id": "l17",
+    "query": "Quiz me on DBMS transaction concepts and ACID guarantees.",
+    "expected_intent": "QUIZ"
+  },
+  {
+    "id": "l18",
+    "query": "Ask me five challenging practice questions about computer networking.",
+    "expected_intent": "QUIZ"
+  },
+  {
+    "id": "l19",
+    "query": "Test my knowledge on relational database keys and referential integrity.",
+    "expected_intent": "QUIZ"
+  },
+  {
+    "id": "l20",
+    "query": "Generate a practice quiz on subnetting and IP address classes.",
+    "expected_intent": "QUIZ"
+  }
+]
