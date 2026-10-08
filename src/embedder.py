@@ -16,7 +16,7 @@ Model Details:
 """
 
 import math
-from typing import List, Optional, Union
+from typing import List, Dict, Any, Optional
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
@@ -96,36 +96,14 @@ def embed_text(
     return vector
 
 
-def embed_batch(
+def _embed_single_batch(
     texts: List[str],
-    client: Optional[genai.Client] = None,
-    model: Optional[str] = None,
-    output_dim: Optional[int] = None,
-    task_type: Optional[str] = "RETRIEVAL_DOCUMENT",
+    client: genai.Client,
+    model: str,
+    dim: int,
+    task_type: Optional[str],
 ) -> List[List[float]]:
-    """
-    Generates embeddings for a batch of text strings.
-    Wraps each string into a distinct types.Content object so the SDK treats them
-    as individual documents rather than multi-part components of a single document.
-
-    Args:
-        texts: List of strings to embed.
-        client: Optional pre-authenticated GenAI client.
-        model: Optional model name override.
-        output_dim: Optional embedding dimension override.
-        task_type: Optional task type (defaults to RETRIEVAL_DOCUMENT).
-
-    Returns:
-        List of embedding vectors.
-    """
-    if not texts:
-        return []
-
-    settings = get_settings()
-    active_client = client or get_genai_client()
-    active_model = model or settings.embedding_model
-    dim = output_dim or settings.embedding_dim
-
+    """Helper that executes a single API batch call."""
     config = types.EmbedContentConfig(
         output_dimensionality=dim,
         task_type=task_type,
@@ -138,8 +116,8 @@ def embed_batch(
     ]
 
     try:
-        response = active_client.models.embed_content(
-            model=active_model,
+        response = client.models.embed_content(
+            model=model,
             contents=content_items,
             config=config,
         )
@@ -170,11 +148,60 @@ def embed_batch(
     return vectors
 
 
+def embed_batch(
+    texts: List[str],
+    client: Optional[genai.Client] = None,
+    model: Optional[str] = None,
+    output_dim: Optional[int] = None,
+    task_type: Optional[str] = "RETRIEVAL_DOCUMENT",
+    batch_size: int = 20,
+) -> List[List[float]]:
+    """
+    Generates embeddings for a batch of text strings, chunking requests into
+    sub-batches if necessary to respect API limits.
+
+    Args:
+        texts: List of strings to embed.
+        client: Optional pre-authenticated GenAI client.
+        model: Optional model name override.
+        output_dim: Optional embedding dimension override.
+        task_type: Optional task type (defaults to RETRIEVAL_DOCUMENT).
+        batch_size: Max texts per individual API request (defaults to 20).
+
+    Returns:
+        List of embedding vectors.
+    """
+    if not texts:
+        return []
+
+    settings = get_settings()
+    active_client = client or get_genai_client()
+    active_model = model or settings.embedding_model
+    dim = output_dim or settings.embedding_dim
+
+    all_vectors: List[List[float]] = []
+
+    # Process in manageable sub-batches
+    for i in range(0, len(texts), batch_size):
+        sub_batch = texts[i : i + batch_size]
+        sub_vectors = _embed_single_batch(
+            texts=sub_batch,
+            client=active_client,
+            model=active_model,
+            dim=dim,
+            task_type=task_type,
+        )
+        all_vectors.extend(sub_vectors)
+
+    return all_vectors
+
+
 def embed_documents(
     texts: List[str],
     client: Optional[genai.Client] = None,
     model: Optional[str] = None,
     output_dim: Optional[int] = None,
+    batch_size: int = 20,
 ) -> List[List[float]]:
     """
     Generates dense embeddings for documents/chunks to be indexed.
@@ -186,7 +213,50 @@ def embed_documents(
         model=model,
         output_dim=output_dim,
         task_type="RETRIEVAL_DOCUMENT",
+        batch_size=batch_size,
     )
+
+
+def embed_chunks(
+    chunks: List[Dict[str, Any]],
+    client: Optional[genai.Client] = None,
+    model: Optional[str] = None,
+    output_dim: Optional[int] = None,
+    batch_size: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Generates embeddings for a list of document chunks and attaches each embedding
+    to a copy of the corresponding chunk dictionary while preserving all metadata.
+
+    Args:
+        chunks: List of chunk dictionaries produced by chunker.py
+        client: Optional pre-authenticated GenAI client
+        model: Optional model override
+        output_dim: Optional dimension override
+        batch_size: Max chunks per API request
+
+    Returns:
+        List of chunk dictionaries with all original metadata plus the 'embedding' key.
+    """
+    if not chunks:
+        return []
+
+    texts = [c["text"] for c in chunks]
+    embeddings = embed_documents(
+        texts=texts,
+        client=client,
+        model=model,
+        output_dim=output_dim,
+        batch_size=batch_size,
+    )
+
+    enriched_chunks: List[Dict[str, Any]] = []
+    for chunk, emb in zip(chunks, embeddings):
+        item = dict(chunk)  # Preserve original dictionary and copy
+        item["embedding"] = emb
+        enriched_chunks.append(item)
+
+    return enriched_chunks
 
 
 def embed_query(
