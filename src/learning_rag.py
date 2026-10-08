@@ -1,4 +1,4 @@
-﻿"""
+"""
 Learning RAG Module for StudentAI.
 Implements intent-driven academic question answering and pedagogical generation:
 - Applies academic metadata filter (category="academic") to retrieval.
@@ -22,6 +22,8 @@ from src.context_builder import build_context
 from src.sparse_retriever import SparseRetriever
 from src.vector_store import initialize_vector_store
 from src.learning_router import route_learning_query, VALID_INTENTS
+from src.topic_detector import detect_learning_topic
+from src.learning_tracker import record_learning_event
 
 STANDARD_REFUSAL = "I couldn't find the answer in the provided documents."
 
@@ -170,9 +172,10 @@ def answer_learning_question(
     collection_name: Optional[str] = None,
     confidence_threshold: float = 0.70,
     sparse_retriever: Optional[SparseRetriever] = None,
+    user_id: str = "default_user",
 ) -> Dict[str, Any]:
     """
-    Executes the Learning RAG pipeline with intent routing and academic domain isolation.
+    Executes the Learning RAG pipeline with intent routing, topic detection, and academic domain isolation.
 
     Args:
         query: Student question or query string.
@@ -183,6 +186,7 @@ def answer_learning_question(
         collection_name: Optional Qdrant collection override.
         confidence_threshold: Confidence threshold for router (default 0.70).
         sparse_retriever: Optional SparseRetriever instance.
+        user_id: User identifier for learning tracking.
 
     Returns:
         Structured response dictionary:
@@ -191,6 +195,8 @@ def answer_learning_question(
             "intent": str,
             "confidence": float,
             "reason": str,
+            "topic": str,
+            "subtopic": str,
             "answer": str,
             "sources": List[Dict[str, Any]],
         }
@@ -199,6 +205,8 @@ def answer_learning_question(
             "intent": "QUIZ",
             "confidence": float,
             "reason": str,
+            "topic": str,
+            "subtopic": str,
             "questions": List[Dict[str, str]],
             "sources": List[Dict[str, Any]],
         }
@@ -226,7 +234,15 @@ def answer_learning_question(
         confidence = route_res["confidence"]
         reason = route_res["reason"]
 
-    # 2. Academic Hybrid Retrieval (category="academic")
+    # 2. Topic Detection
+    topic_res = detect_learning_topic(
+        clean_query,
+        client=g_client,
+    )
+    detected_topic = topic_res.get("topic", "Computer Science")
+    detected_subtopic = topic_res.get("subtopic", "General")
+
+    # 3. Academic Hybrid Retrieval (category="academic")
     q_client = client or initialize_vector_store()
     try:
         retrieved_chunks = hybrid_search(
@@ -241,10 +257,10 @@ def answer_learning_question(
         if client is None:
             q_client.close()
 
-    # 3. Assemble Academic Context
+    # 4. Assemble Academic Context
     context_str = build_context(retrieved_chunks)
 
-    # 4. Generate Intent-Tailored Grounded Content
+    # 5. Generate Intent-Tailored Grounded Content
     gen_result = _generate_learning_content(
         question=clean_query,
         context=context_str,
@@ -253,7 +269,7 @@ def answer_learning_question(
         model=active_model,
     )
 
-    # 5. Extract Sources
+    # 6. Extract Sources
     sources = []
     for item in retrieved_chunks:
         sources.append({
@@ -267,22 +283,48 @@ def answer_learning_question(
             "document_type": item.get("document_type", "notes"),
         })
 
-    # 6. Format Structured Output
+    # 7. Determine status and record event
     if active_intent == "QUIZ":
         questions_list = gen_result.get("questions", []) if isinstance(gen_result, dict) else []
+        event_status = "QUIZ_GENERATED"
+    else:
+        ans_text = gen_result if isinstance(gen_result, str) else STANDARD_REFUSAL
+        if ans_text.strip() == STANDARD_REFUSAL:
+            event_status = "REFUSED"
+        else:
+            event_status = "ANSWERED"
+
+    try:
+        record_learning_event(
+            query=clean_query,
+            topic=detected_topic,
+            subtopic=detected_subtopic,
+            intent=active_intent,
+            status=event_status,
+            sources_count=len(sources),
+            user_id=user_id,
+        )
+    except Exception:
+        pass
+
+    # 8. Format Structured Output
+    if active_intent == "QUIZ":
         return {
             "intent": "QUIZ",
             "confidence": confidence,
             "reason": reason,
+            "topic": detected_topic,
+            "subtopic": detected_subtopic,
             "questions": questions_list,
             "sources": sources,
         }
     else:
-        ans_text = gen_result if isinstance(gen_result, str) else STANDARD_REFUSAL
         return {
             "intent": active_intent,
             "confidence": confidence,
             "reason": reason,
+            "topic": detected_topic,
+            "subtopic": detected_subtopic,
             "answer": ans_text,
             "sources": sources,
         }

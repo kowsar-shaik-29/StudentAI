@@ -129,10 +129,12 @@ class TestLearningRAG(unittest.TestCase):
         self.assertEqual(result["questions"][0]["question"], "What does Atomicity ensure?")
         self.assertNotIn("answer", result)  # Quiz does not give away answers
 
+    @patch("src.learning_rag.detect_learning_topic")
     @patch("src.learning_rag.hybrid_search")
-    def test_empty_context_refusal_and_grounding(self, mock_hybrid):
+    def test_empty_context_refusal_and_grounding(self, mock_hybrid, mock_topic):
         """When hybrid retrieval finds zero relevant chunks, system returns standard refusal."""
         mock_hybrid.return_value = []
+        mock_topic.return_value = {"topic": "Quantum Computing", "subtopic": "General", "confidence": 0.9, "reason": "Physics"}
         mock_genai = MagicMock()
 
         result = answer_learning_question(
@@ -142,13 +144,15 @@ class TestLearningRAG(unittest.TestCase):
         )
 
         self.assertEqual(result["answer"], STANDARD_REFUSAL)
-        # LLM not called when context is empty
+        # LLM generation not called when context is empty
         mock_genai.models.generate_content.assert_not_called()
 
+    @patch("src.learning_rag.detect_learning_topic")
     @patch("src.learning_rag.hybrid_search")
-    def test_empty_context_quiz_returns_empty_questions(self, mock_hybrid):
+    def test_empty_context_quiz_returns_empty_questions(self, mock_hybrid, mock_topic):
         """When context is empty for quiz, returns empty questions list."""
         mock_hybrid.return_value = []
+        mock_topic.return_value = {"topic": "General", "subtopic": "None", "confidence": 0.5, "reason": "Test"}
         mock_genai = MagicMock()
 
         result = answer_learning_question(

@@ -93,3 +93,24 @@ pip install -r requirements.txt
 ```powershell
 python -m src.main status
 ```
+
+---
+
+## Step 15: Learning Analytics Layer
+
+Step 15 introduces the first Learning Analytics layer for StudentAI:
+- **Interaction Tracking (`src/learning_tracker.py`)**: Persists learning queries and practice quiz sessions to `data/learning/learning_events.json` with event statuses (`ANSWERED`, `REFUSED`, `QUIZ_GENERATED`, `QUIZ_ATTEMPTED`).
+- **Topic & Subtopic Detection (`src/topic_detector.py`)**: Uses `gemini-3.5-flash-lite` (temperature 0.0) with prompt injection defense to extract structured disciplines and subtopics (e.g. `Computer Networks -> TCP / Three-Way Handshake`, `DBMS -> Normalization`).
+- **Deterministic Weakness Scoring (`src/learning_analytics.py`)**: Computes weakness metrics without ML or LLM hallucinations:
+  - `quiz_failure_rate = questions_incorrect / questions_attempted`
+  - `refusal_rate = refused_count / max(interaction_count, 1)`
+  - `weakness_score = 0.85 * quiz_failure_rate + 0.15 * refusal_rate` (clamped between `0.0` and `1.0`)
+  - **Weakness Levels**:
+    - `0.00 - 0.29`: `LOW`
+    - `0.30 - 0.59`: `MEDIUM`
+    - `0.60 - 1.00`: `HIGH`
+    - Unquizzed topics (`questions_attempted == 0`): `INSUFFICIENT_DATA` (score `0.00`)
+- **CLI Commands**:
+  - `python -m src.main learning-stats [--topic <TOPIC>]`: View aggregated topic or subtopic statistics and weakness rankings.
+  - `python -m src.main learning-events [--topic <TOPIC>]`: Inspect recent learning interaction events.
+  - `python -m src.main record-quiz --topic "..." --subtopic "..." --attempted N --correct N --incorrect N`: Record quiz outcomes.

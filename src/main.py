@@ -16,6 +16,7 @@ Usage:
 import sys
 import argparse
 import json
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 from collections import Counter
 
@@ -42,6 +43,14 @@ from src.learning_rag import answer_learning_question
 from src.ingestion import ingest_document, ingest_directory
 from src.evaluator import evaluate_retrieval_mode
 from src.generation_evaluator import evaluate_generation_pipeline
+from src.learning_tracker import (
+    record_quiz_attempt,
+    get_learning_events,
+)
+from src.learning_analytics import (
+    get_topic_statistics,
+    get_subtopic_statistics,
+)
 
 
 
@@ -504,8 +513,10 @@ def cmd_learn(
     print("STUDENTAI LEARNING")
     print("=" * 60)
     print(f"\nQuestion:\n{clean_question}\n")
-    print(f"Intent:\n{result['intent']}\n")
-    print(f"Confidence:\n{result['confidence']:.2f}\n")
+    print(f"Topic:       {result.get('topic', 'Computer Science')}")
+    print(f"Subtopic:    {result.get('subtopic', 'General')}")
+    print(f"Intent:      {result['intent']}")
+    print(f"Confidence:  {result['confidence']:.2f}\n")
     if result.get("reason"):
         print(f"Reason:\n{result['reason']}\n")
 
@@ -541,6 +552,107 @@ def cmd_learn(
         print()
 
     print("=" * 60)
+
+
+def cmd_learning_stats(topic: Optional[str] = None) -> None:
+    """Displays aggregated learning statistics and weak topics."""
+    print("=" * 70)
+    print("STUDENTAI LEARNING ANALYTICS")
+    print("=" * 70)
+
+    if topic:
+        sub_stats = get_subtopic_statistics(topic=topic)
+        print(f"\nSubtopic Statistics for: {topic}")
+        print("-" * 70)
+        if not sub_stats:
+            print("No learning events found for this topic.")
+        else:
+            header = f"{'Subtopic':<25}{'Interactions':<14}{'Quizzed':<10}{'Accuracy':<10}{'Weakness':<10}{'Level':<10}"
+            print(header)
+            print("-" * 70)
+            for s in sub_stats:
+                acc_str = f"{s['quiz_accuracy'] * 100:.0f}%" if s["quiz_accuracy"] is not None else "N/A"
+                print(
+                    f"{s['subtopic'][:23]:<25}"
+                    f"{s['interaction_count']:<14}"
+                    f"{s['questions_attempted']:<10}"
+                    f"{acc_str:<10}"
+                    f"{s['weakness_score']:<10.2f}"
+                    f"{s['weakness_level']:<10}"
+                )
+    else:
+        topic_stats = get_topic_statistics()
+        print("\nTopic Overview & Weak-Topic Analysis")
+        print("-" * 70)
+        if not topic_stats:
+            print("No learning events recorded yet.")
+        else:
+            header = f"{'Topic':<25}{'Interactions':<14}{'Quizzed':<10}{'Accuracy':<10}{'Weakness':<10}{'Level':<10}"
+            print(header)
+            print("-" * 70)
+            for t in topic_stats:
+                acc_str = f"{t['quiz_accuracy'] * 100:.0f}%" if t["quiz_accuracy"] is not None else "N/A"
+                print(
+                    f"{t['topic'][:23]:<25}"
+                    f"{t['interaction_count']:<14}"
+                    f"{t['questions_attempted']:<10}"
+                    f"{acc_str:<10}"
+                    f"{t['weakness_score']:<10.2f}"
+                    f"{t['weakness_level']:<10}"
+                )
+
+    print("=" * 70)
+
+
+def cmd_learning_events(topic: Optional[str] = None) -> None:
+    """Lists recent learning interaction events."""
+    events = get_learning_events(topic=topic)
+    print("=" * 70)
+    print("STUDENTAI LEARNING EVENTS")
+    print("=" * 70)
+    if not events:
+        print("No learning events recorded.")
+    else:
+        for idx, ev in enumerate(events[-20:], start=1):
+            ts = ev.timestamp[:19].replace("T", " ")
+            print(f"{idx}. [{ts}] [{ev.status}] [{ev.intent}] {ev.topic} -> {ev.subtopic}")
+            print(f"   Query: {ev.query}")
+            if ev.questions_attempted > 0:
+                print(f"   Score: {ev.questions_correct}/{ev.questions_attempted} correct")
+            print()
+    print("=" * 70)
+
+
+def cmd_record_quiz(
+    topic: str,
+    subtopic: str,
+    attempted: int,
+    correct: int,
+    incorrect: int,
+) -> None:
+    """Records a practice quiz attempt."""
+    try:
+        ev = record_quiz_attempt(
+            topic=topic,
+            subtopic=subtopic,
+            questions_attempted=attempted,
+            questions_correct=correct,
+            questions_incorrect=incorrect,
+        )
+        print("=" * 60)
+        print("QUIZ ATTEMPT RECORDED")
+        print("=" * 60)
+        print(f"Topic:       {ev.topic}")
+        print(f"Subtopic:    {ev.subtopic}")
+        print(f"Attempted:   {ev.questions_attempted}")
+        print(f"Correct:     {ev.questions_correct}")
+        print(f"Incorrect:   {ev.questions_incorrect}")
+        acc = (ev.questions_correct / ev.questions_attempted * 100) if ev.questions_attempted > 0 else 0
+        print(f"Accuracy:    {acc:.1f}%")
+        print("=" * 60)
+    except Exception as err:
+        print(f"Error recording quiz attempt: {err}")
+        sys.exit(1)
 
 
 def cmd_evaluate(
@@ -749,6 +861,22 @@ def main():
     learn_parser.add_argument("--intent", type=str, default=None, choices=["EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING"], help="Explicitly specify learning intent override")
     learn_parser.add_argument("--threshold", type=float, default=0.70, help="Confidence threshold to accept intent (default: 0.70)")
 
+    # Learning-stats command (Step 15: Learning Analytics)
+    stats_parser = subparsers.add_parser("learning-stats", help="Display topic and subtopic learning analytics and weak topics")
+    stats_parser.add_argument("--topic", type=str, default=None, help="Filter analytics down to a specific topic")
+
+    # Learning-events command (Step 15: Interaction Tracking)
+    events_parser = subparsers.add_parser("learning-events", help="List recent learning interaction events")
+    events_parser.add_argument("--topic", type=str, default=None, help="Filter events by topic")
+
+    # Record-quiz command (Step 15: Quiz Outcome Tracking)
+    quiz_parser = subparsers.add_parser("record-quiz", help="Record student quiz performance outcome")
+    quiz_parser.add_argument("--topic", type=str, required=True, help="Academic topic")
+    quiz_parser.add_argument("--subtopic", type=str, required=True, help="Academic subtopic")
+    quiz_parser.add_argument("--attempted", type=int, required=True, help="Total questions attempted")
+    quiz_parser.add_argument("--correct", type=int, required=True, help="Total questions answered correctly")
+    quiz_parser.add_argument("--incorrect", type=int, required=True, help="Total questions answered incorrectly")
+
     # Evaluate command (Step 11)
     eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
     eval_parser.add_argument("--file", type=str, default="data/evaluation/rag_eval.json", help="Path to evaluation dataset")
@@ -807,6 +935,18 @@ def main():
             top_k=args.top_k,
             intent=args.intent,
             threshold=args.threshold,
+        )
+    elif args.command == "learning-stats":
+        cmd_learning_stats(topic=args.topic)
+    elif args.command == "learning-events":
+        cmd_learning_events(topic=args.topic)
+    elif args.command == "record-quiz":
+        cmd_record_quiz(
+            topic=args.topic,
+            subtopic=args.subtopic,
+            attempted=args.attempted,
+            correct=args.correct,
+            incorrect=args.incorrect,
         )
     elif args.command == "evaluate":
         cmd_evaluate(
