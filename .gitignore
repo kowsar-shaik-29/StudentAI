@@ -1,0 +1,34 @@
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment and Secret Files
+.env
+.env.local
+*.env
+
+# Python Bytecode and Caches
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# Local Qdrant Vector Database
+data/qdrant_storage/
+!data/qdrant_storage/.gitkeep
+!data/sample_docs/.gitkeep
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+desktop.ini

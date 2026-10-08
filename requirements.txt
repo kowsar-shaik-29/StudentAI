@@ -1,0 +1,5 @@
+# Core RAG dependencies pinned for Python 3.12 compatibility
+google-genai==2.29.0
+qdrant-client==1.19.1
+pymupdf==1.28.2
+python-dotenv==1.2.4
