@@ -1,10 +1,11 @@
 """
 CLI Entry Point for StudentAI.
-Provides commands to inspect configuration, extract PDF text, ingest documents, and query.
+Provides commands to inspect configuration, extract PDF text, chunk documents, ingest, and query.
 
 Usage:
   python -m src.main status
-  python -m src.main extract <path-to-pdf> [--preview-chars 200] [--max-pages 5]
+  python -m src.main extract <path-to-pdf> [--preview-chars 250] [--max-pages 5]
+  python -m src.main chunk <path-to-pdf> [--chunk-size 1000] [--overlap 200]
   python -m src.main ingest <path-to-pdf>
   python -m src.main query "Your question here"
 """
@@ -12,6 +13,7 @@ Usage:
 import sys
 import argparse
 from pathlib import Path
+from collections import Counter
 
 # Ensure UTF-8 output on Windows consoles to prevent UnicodeEncodeError
 if sys.platform == "win32":
@@ -22,7 +24,7 @@ if sys.platform == "win32":
 
 from src.config import get_settings, require_api_key
 from src.extractor import extract_pdf, extract_pdf_pages
-from src.chunker import chunk_pages
+from src.chunker import create_chunks, chunk_pages
 from src.embedder import embed_batch, get_genai_client
 from src.vector_store import get_qdrant_client, init_collection, upsert_chunks
 from src.retriever import retrieve_context
@@ -105,6 +107,74 @@ def cmd_extract(pdf_path: str, preview_chars: int = 250, max_pages_preview: int 
     print("Extraction completed successfully.")
 
 
+def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview_count: int = 5) -> None:
+    """
+    Step 3: Chunks extracted PDF pages and displays concise metrics and previews.
+    Does NOT call any LLM, generate embeddings, or write to Qdrant.
+    """
+    path = Path(pdf_path)
+    print("=" * 60)
+    print(f"Chunking Document: {path.name}")
+    print("=" * 60)
+
+    try:
+        pages = extract_pdf(path, include_empty=True)
+        chunks = create_chunks(pages, chunk_size=chunk_size, overlap=overlap)
+    except Exception as err:
+        print(f"Chunking Error: {err}")
+        sys.exit(1)
+
+    total_pages = len(pages)
+    total_chunks = len(chunks)
+
+    if total_chunks == 0:
+        print(f"No chunks generated (document may be empty).")
+        return
+
+    # Compute statistics
+    char_counts = [c["char_count"] for c in chunks]
+    avg_chunk_size = sum(char_counts) / total_chunks
+    min_chunk_size = min(char_counts)
+    max_chunk_size = max(char_counts)
+
+    # Chunks per page distribution
+    chunks_per_page = Counter(c["page_number"] for c in chunks)
+
+    print(f"File:               {path.name}")
+    print(f"Total Pages:        {total_pages}")
+    print(f"Total Chunks:       {total_chunks}")
+    print(f"Chunk Size Config:  {chunk_size} chars (Overlap: {overlap} chars)")
+    print(f"Average Chunk Size: {avg_chunk_size:.1f} characters")
+    print(f"Min Chunk Size:     {min_chunk_size} characters")
+    print(f"Max Chunk Size:     {max_chunk_size} characters")
+    print("-" * 60)
+    print("Chunks per Page:")
+    for page_num in sorted(chunks_per_page.keys()):
+        count = chunks_per_page[page_num]
+        print(f"  Page {page_num:2d}: {count} chunk(s)")
+    print("-" * 60)
+
+    # Preview first few chunks
+    show_count = min(total_chunks, preview_count)
+    print(f"Previewing first {show_count} chunk(s):\n")
+    for i in range(show_count):
+        c = chunks[i]
+        preview_text = c["text"][:200].replace("\r", "").replace("\n", " ")
+        if len(c["text"]) > 200:
+            preview_text += "..."
+
+        print(f"Chunk {i + 1}:")
+        print(f"  ID:           {c['chunk_id']}")
+        print(f"  Page:         {c['page_number']}")
+        print(f"  Characters:   {c['char_count']}")
+        print(f"  Text Preview: {preview_text}\n")
+
+    if total_chunks > show_count:
+        print(f"... and {total_chunks - show_count} more chunk(s).")
+    print("=" * 60)
+    print("Chunking completed successfully.")
+
+
 def cmd_ingest(pdf_path: str) -> None:
     """Executes PDF extraction -> chunking -> embedding -> Qdrant storage."""
     require_api_key()
@@ -115,7 +185,7 @@ def cmd_ingest(pdf_path: str) -> None:
     print(f"      Extracted {len(pages)} pages with text.")
 
     print(f"[2/4] Chunking pages (size={settings.chunk_size}, overlap={settings.chunk_overlap})...")
-    chunks = chunk_pages(pages, chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+    chunks = create_chunks(pages, chunk_size=settings.chunk_size, overlap=settings.chunk_overlap)
     print(f"      Created {len(chunks)} chunks.")
 
     print(f"[3/4] Generating embeddings using {settings.embedding_model}...")
@@ -178,6 +248,12 @@ def main():
     extract_parser.add_argument("--preview-chars", type=int, default=250, help="Number of characters to preview per page")
     extract_parser.add_argument("--max-pages", type=int, default=5, help="Maximum number of pages to preview")
 
+    # Chunk command (Step 3)
+    chunk_parser = subparsers.add_parser("chunk", help="Chunk an extracted PDF without embeddings or LLM")
+    chunk_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+    chunk_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in characters")
+    chunk_parser.add_argument("--overlap", type=int, default=200, help="Chunk overlap in characters")
+
     # Ingest command
     ingest_parser = subparsers.add_parser("ingest", help="Ingest and index a PDF file")
     ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
@@ -193,6 +269,8 @@ def main():
         cmd_status()
     elif args.command == "extract":
         cmd_extract(args.pdf_path, preview_chars=args.preview_chars, max_pages_preview=args.max_pages)
+    elif args.command == "chunk":
+        cmd_chunk(args.pdf_path, chunk_size=args.chunk_size, overlap=args.overlap)
     elif args.command == "ingest":
         cmd_ingest(args.pdf_path)
     elif args.command == "query":
