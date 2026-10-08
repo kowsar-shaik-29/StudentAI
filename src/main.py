@@ -1,12 +1,14 @@
 """
 CLI Entry Point for StudentAI.
-Provides commands to inspect configuration, extract PDF text, chunk documents, index vectors, search, and ask.
+Provides commands to inspect configuration, extract PDF text, chunk documents, index vectors,
+ingest directories, search, and ask questions.
 
 Usage:
   python -m src.main status
   python -m src.main extract <path-to-pdf>
   python -m src.main chunk <path-to-pdf>
-  python -m src.main index <path-to-pdf>
+  python -m src.main ingest <path-to-pdf>
+  python -m src.main ingest-dir <directory-path>
   python -m src.main search "<question>" [--top-k 5]
   python -m src.main ask "<question>" [--top-k 5]
 """
@@ -26,15 +28,14 @@ if sys.platform == "win32":
 from src.config import get_settings, require_api_key
 from src.extractor import extract_pdf
 from src.chunker import create_chunks
-from src.embedder import embed_chunks
 from src.vector_store import (
     initialize_vector_store,
-    upsert_chunks,
     count_vectors,
     get_collection_info,
 )
 from src.retriever import search
 from src.rag import answer_question
+from src.ingestion import ingest_document, ingest_directory
 
 
 def cmd_status() -> None:
@@ -175,54 +176,57 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
     print("Chunking completed successfully.")
 
 
-def cmd_index(pdf_path: str) -> None:
-    """Executes full indexing pipeline: PDF -> extract -> chunk -> embed -> store in Qdrant."""
+def cmd_ingest_single(pdf_path: str) -> None:
+    """Ingests a single PDF document into Qdrant."""
     require_api_key()
-    settings = get_settings()
-    path = Path(pdf_path)
-
-    print("=" * 60)
-    print(f"Indexing Document: {path.name}")
-    print("=" * 60)
-
-    # 1. Extraction
-    print(f"[1/4] Extracting text from: {path.name}")
-    pages = extract_pdf(path, include_empty=True)
-    pages_with_text = sum(1 for p in pages if p["has_text"])
-    print(f"      Extracted {len(pages)} pages ({pages_with_text} with text).")
-
-    # 2. Chunking
-    print(f"[2/4] Chunking pages (size={settings.chunk_size}, overlap={settings.chunk_overlap})...")
-    chunks = create_chunks(pages, chunk_size=settings.chunk_size, overlap=settings.chunk_overlap)
-    print(f"      Created {len(chunks)} chunks.")
-
-    # 3. Embedding
-    print(f"[3/4] Generating embeddings using {settings.embedding_model} (dim={settings.embedding_dim})...")
-    enriched_chunks = embed_chunks(chunks, batch_size=20)
-    print(f"      Generated {len(enriched_chunks)} vector embeddings.")
-
-    # 4. Storage in local Qdrant
-    print(f"[4/4] Storing vectors in Qdrant collection '{settings.qdrant_collection_name}'...")
-    q_client = initialize_vector_store()
     try:
-        stored_count = upsert_chunks(q_client, enriched_chunks)
-        total_in_collection = count_vectors(q_client)
-    finally:
-        q_client.close()
+        stats = ingest_document(pdf_path)
+    except Exception as err:
+        print(f"Ingestion Error: {err}")
+        sys.exit(1)
 
     print("=" * 60)
-    print("INDEXING SUMMARY:")
+    print("DOCUMENT INGESTION")
     print("=" * 60)
-    print(f"Document:         {path.name}")
-    print(f"Pages:            {len(pages)}")
-    print(f"Chunks:           {len(chunks)}")
-    print(f"Embeddings:       {len(enriched_chunks)}")
-    print(f"Vectors stored:   {stored_count}")
-    print(f"Collection:       {settings.qdrant_collection_name}")
-    print(f"Vector dimension: {settings.embedding_dim}")
-    print(f"Total in DB:      {total_in_collection}")
+    print(f"\nDocument:\n{stats['file_name']}\n")
+    print(f"Pages:\n{stats['pages']} ({stats['pages_with_text']} with text)\n")
+    print(f"Chunks:\n{stats['chunks']}\n")
+    print(f"Embeddings:\n{stats['embeddings']}\n")
+    print(f"Vectors stored:\n{stats['vectors_stored']}\n")
     print("=" * 60)
-    print("Indexing completed successfully!")
+
+
+def cmd_ingest_dir(directory_path: str) -> None:
+    """Ingests all PDF files from a directory into Qdrant."""
+    require_api_key()
+    try:
+        summary = ingest_directory(directory_path)
+    except Exception as err:
+        print(f"Directory Ingestion Error: {err}")
+        sys.exit(1)
+
+    print("=" * 60)
+    print("DIRECTORY INGESTION SUMMARY")
+    print("=" * 60)
+    print(f"Total PDFs Found:       {summary['total_files_found']}")
+    print(f"Successfully Ingested:  {summary['successful_files']}")
+    print(f"Failed Files:           {len(summary['failed_files'])}")
+    print(f"Total Pages Processed:  {summary['total_pages']}")
+    print(f"Total Chunks Created:   {summary['total_chunks']}")
+    print(f"Total Vectors Stored:   {summary['total_vectors_stored']}")
+    print("-" * 60)
+
+    if summary["details"]:
+        print("Indexed Documents:")
+        for doc in summary["details"]:
+            print(f"  - {doc['file_name']}: {doc['pages']} pages, {doc['chunks']} chunks, {doc['vectors_stored']} vectors")
+
+    if summary["failed_files"]:
+        print("\nFailed Documents:")
+        for failed in summary["failed_files"]:
+            print(f"  - {failed['file_name']}: {failed['error']}")
+
+    print("=" * 60)
 
 
 def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
@@ -267,10 +271,7 @@ def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
 
 
 def cmd_ask(question: str, top_k: int = 5) -> None:
-    """
-    Step 7: Executes end-to-end RAG question answering.
-    Retrieves context from Qdrant and generates a grounded answer with citations.
-    """
+    """Executes end-to-end RAG question answering."""
     require_api_key()
 
     print("=" * 60)
@@ -318,13 +319,17 @@ def main():
     chunk_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in characters")
     chunk_parser.add_argument("--overlap", type=int, default=200, help="Chunk overlap in characters")
 
-    # Index command (Step 5)
-    index_parser = subparsers.add_parser("index", help="Extract, chunk, embed, and index a PDF into Qdrant")
+    # Ingest / Index command (Step 8)
+    ingest_parser = subparsers.add_parser("ingest", help="Ingest a single PDF into Qdrant")
+    ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+
+    # Index command (alias for ingest)
+    index_parser = subparsers.add_parser("index", help="Alias for ingest")
     index_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
 
-    # Ingest command (alias to index)
-    ingest_parser = subparsers.add_parser("ingest", help="Alias for index")
-    ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+    # Ingest-dir command (Step 8)
+    ingest_dir_parser = subparsers.add_parser("ingest-dir", help="Ingest all PDFs in a directory into Qdrant")
+    ingest_dir_parser.add_argument("directory_path", type=str, help="Path to the directory containing PDFs")
 
     # Search command (Step 6)
     search_parser = subparsers.add_parser("search", help="Execute semantic retrieval search against Qdrant")
@@ -336,11 +341,6 @@ def main():
     ask_parser.add_argument("question", type=str, help="Question to answer")
     ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
 
-    # Query command (alias to ask)
-    query_parser = subparsers.add_parser("query", help="Alias for ask")
-    query_parser.add_argument("question", type=str, help="Question to answer")
-    query_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
-
     args = parser.parse_args()
 
     if args.command == "status":
@@ -349,11 +349,13 @@ def main():
         cmd_extract(args.pdf_path, preview_chars=args.preview_chars, max_pages_preview=args.max_pages)
     elif args.command == "chunk":
         cmd_chunk(args.pdf_path, chunk_size=args.chunk_size, overlap=args.overlap)
-    elif args.command in ("index", "ingest"):
-        cmd_index(args.pdf_path)
+    elif args.command in ("ingest", "index"):
+        cmd_ingest_single(args.pdf_path)
+    elif args.command == "ingest-dir":
+        cmd_ingest_dir(args.directory_path)
     elif args.command == "search":
         cmd_search(args.query, top_k=args.top_k)
-    elif args.command in ("ask", "query"):
+    elif args.command == "ask":
         cmd_ask(args.question, top_k=args.top_k)
     else:
         parser.print_help()
