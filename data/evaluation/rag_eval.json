@@ -1,0 +1,119 @@
+[
+  {
+    "id": "eval_01",
+    "question": "What is star topology?",
+    "category": "direct_factual_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p1_c0", "computer_networking_notes.pdf_p1_c1"],
+    "answerable": true
+  },
+  {
+    "id": "eval_02",
+    "question": "What happens when the central device of a star topology fails?",
+    "category": "direct_factual_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p1_c0", "computer_networking_notes.pdf_p1_c1"],
+    "answerable": true
+  },
+  {
+    "id": "eval_03",
+    "question": "Describe the structure of a bus topology.",
+    "category": "direct_factual_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [2],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p2_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_04",
+    "question": "What is a computer network?",
+    "category": "direct_factual_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_05",
+    "question": "What is a primary key?",
+    "category": "direct_factual_database",
+    "expected_documents": ["database_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["database_notes.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_06",
+    "question": "Why must a primary key be unique?",
+    "category": "direct_factual_database",
+    "expected_documents": ["database_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["database_notes.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_07",
+    "question": "What does ACID stand for?",
+    "category": "exact_technical_database",
+    "expected_documents": ["database_notes.pdf"],
+    "expected_pages": [2],
+    "expected_chunk_ids": ["database_notes.pdf_p2_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_08",
+    "question": "What is SQL?",
+    "category": "exact_technical_database",
+    "expected_documents": ["database_notes.pdf"],
+    "expected_pages": [2],
+    "expected_chunk_ids": ["database_notes.pdf_p2_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_09",
+    "question": "How many layers comprise the Open System Interconnections model and what does its lowest layer do?",
+    "category": "semantic_paraphrased_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [6],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p6_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_10",
+    "question": "How do database systems enforce relationships between separate tables and prevent orphan records?",
+    "category": "semantic_paraphrased_database",
+    "expected_documents": ["database_notes.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["database_notes.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_11",
+    "question": "What is quantum networking?",
+    "category": "out_of_domain",
+    "expected_documents": [],
+    "expected_pages": [],
+    "expected_chunk_ids": [],
+    "answerable": false
+  },
+  {
+    "id": "eval_12",
+    "question": "What does NIC stand for and what hardware identification address does it possess?",
+    "category": "exact_technical_networking",
+    "expected_documents": ["computer_networking_notes.pdf"],
+    "expected_pages": [15],
+    "expected_chunk_ids": ["computer_networking_notes.pdf_p15_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_13",
+    "question": "What is blockchain consensus?",
+    "category": "out_of_domain",
+    "expected_documents": [],
+    "expected_pages": [],
+    "expected_chunk_ids": [],
+    "answerable": false
+  }
+]

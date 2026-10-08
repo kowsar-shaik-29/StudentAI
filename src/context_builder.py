@@ -38,3 +38,27 @@ def build_context(results: List[Dict[str, Any]]) -> str:
         passages.append(passage)
 
     return "\n\n---\n\n".join(passages)
+
+
+def extract_page_citations(text: str) -> List[int]:
+    """
+    Extracts page numbers cited in bracketed format like [Page 1], [Page 2, 3], or [Page 1][Page 2].
+
+    Returns:
+        Sorted unique list of cited integer page numbers.
+    """
+    import re
+    if not text:
+        return []
+
+    # Matches patterns like [Page 1], [Page 12], [Page 1, 2]
+    matches = re.findall(r"\[Page\s+([0-9,\s]+)\]", text, re.IGNORECASE)
+    pages = set()
+    for m in matches:
+        for num in re.findall(r"\d+", m):
+            try:
+                pages.add(int(num))
+            except ValueError:
+                pass
+    return sorted(list(pages))
+

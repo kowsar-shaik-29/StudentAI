@@ -15,6 +15,7 @@ Usage:
 
 import sys
 import argparse
+import json
 from pathlib import Path
 from collections import Counter
 
@@ -38,6 +39,9 @@ from src.sparse_retriever import get_sparse_retriever
 from src.hybrid_retriever import hybrid_search
 from src.rag import answer_question
 from src.ingestion import ingest_document, ingest_directory
+from src.evaluator import evaluate_retrieval_mode
+from src.generation_evaluator import evaluate_generation_pipeline
+
 
 
 def cmd_status() -> None:
@@ -387,6 +391,136 @@ def cmd_ask(
     print("=" * 60)
 
 
+def cmd_evaluate(
+    eval_file: str = "data/evaluation/rag_eval.json",
+    top_k: int = 5,
+    skip_generation: bool = False,
+) -> None:
+    """Executes full RAG evaluation benchmark across retrieval modes and generation."""
+    require_api_key()
+    path = Path(eval_file)
+    if not path.is_file():
+        print(f"Error: Evaluation file not found at: {path}")
+        sys.exit(1)
+
+    with open(path, "r", encoding="utf-8") as f:
+        eval_dataset = json.load(f)
+
+    q_client = initialize_vector_store()
+    sr = get_sparse_retriever()
+    settings = get_settings()
+
+    q_info = get_collection_info(q_client)
+    total_docs = len(set(d["file_name"] for d in sr.documents.values()))
+    total_chunks = q_info.get("points_count", sr.total_docs)
+
+    print("=" * 60)
+    print("STUDENTAI RAG EVALUATION")
+    print("=" * 60)
+    print(f"\nDocuments:\n{total_docs}\n")
+    print(f"Chunks:\n{total_chunks}\n")
+    print(f"Questions:\n{len(eval_dataset)}\n")
+
+    # 1. Retrieval Evaluation across modes
+    modes = ["dense", "sparse", "hybrid", "hybrid_rerank"]
+    mode_labels = {
+        "dense": "Dense",
+        "sparse": "Sparse",
+        "hybrid": "Hybrid",
+        "hybrid_rerank": "Hybrid + Reranker",
+    }
+    mode_eval_results = {}
+
+    import time
+    t_ret_start = time.perf_counter()
+
+    for m in modes:
+        mode_eval_results[m] = evaluate_retrieval_mode(
+            eval_dataset=eval_dataset,
+            mode=m,
+            top_k=top_k,
+            client=q_client,
+            sparse_retriever=sr,
+        )
+
+    t_ret_total = time.perf_counter() - t_ret_start
+
+    print("-" * 60)
+    print("RETRIEVAL RESULTS")
+    print("-" * 60)
+    print(f"{'Mode':<22}{'R@1':<8}{'R@3':<8}{'R@5':<8}{'MRR':<8}")
+    for m in modes:
+        met = mode_eval_results[m]["metrics"]
+        lbl = mode_labels[m]
+        print(f"{lbl:<22}{met['recall_at_1']:<8.4f}{met['recall_at_3']:<8.4f}{met['recall_at_5']:<8.4f}{met['mrr']:<8.4f}")
+
+    print("\n" + "-" * 60)
+    print("DOCUMENT RECALL")
+    print("-" * 60)
+    print(f"{'Mode':<22}{'Document Recall@5':<18}")
+    for m in modes:
+        met = mode_eval_results[m]["metrics"]
+        lbl = mode_labels[m]
+        print(f"{lbl:<22}{met['doc_recall_at_5']:<18.4f}")
+
+    # 2. Generation Evaluation
+    t_gen_start = time.perf_counter()
+    if not skip_generation:
+        gen_eval = evaluate_generation_pipeline(
+            eval_dataset=eval_dataset,
+            client=q_client,
+            hybrid=True,
+            sparse_retriever=sr,
+        )
+    else:
+        gen_eval = None
+    t_gen_total = time.perf_counter() - t_gen_start
+
+    if gen_eval:
+        print("\n" + "-" * 60)
+        print("GENERATION CHECKS")
+        print("-" * 60)
+        print(f"Citation correctness:\n{gen_eval['citation_accuracy'] * 100:.1f}%\n")
+        print(f"Expected document correctness:\n{gen_eval['document_accuracy'] * 100:.1f}%\n")
+        print(f"Refusal correctness:\n{gen_eval['refusal_accuracy'] * 100:.1f}%\n")
+
+    # 3. Per-Question Detailed Reporting for Hybrid Mode
+    print("-" * 60)
+    print("PER-QUESTION RESULTS (HYBRID)")
+    print("-" * 60)
+    hybrid_details = mode_eval_results["hybrid"]["per_question"]
+    for idx, item in enumerate(hybrid_details):
+        q_text = item["question"]
+        is_ans = item["answerable"]
+        top_res = item["top_result"] or "None"
+        first_rank = item["first_relevant_rank"] if is_ans else "N/A"
+        
+        # Generation check for this question
+        gen_check = gen_eval["checks"][idx] if gen_eval else None
+        cites = gen_check["cited_pages"] if gen_check else []
+        passed = gen_check["passed"] if gen_check else item["is_hit_top5"]
+        status_str = "PASS" if passed else "FAIL"
+
+        print(f"Question: {q_text}")
+        print(f"Mode:     Hybrid")
+        print(f"Top result: {top_res}")
+        print(f"First relevant rank: {first_rank}")
+        if is_ans and cites:
+            print(f"Citation: [Page {', '.join(str(p) for p in cites)}]")
+        elif not is_ans:
+            print(f"Refusal verified: {gen_check['refusal_correct'] if gen_check else 'Yes'}")
+        print(f"Status:   {status_str}")
+        print()
+
+    print("=" * 60)
+    print(f"Evaluation Runtime:")
+    print(f"  Retrieval (4 modes):  {t_ret_total:.2f}s")
+    if gen_eval:
+        print(f"  Generation pipeline:  {t_gen_total:.2f}s")
+    print("=" * 60)
+    q_client.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description="StudentAI - Personal Knowledge, Learning & Career RAG")
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -435,6 +569,12 @@ def main():
     ask_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates")
     ask_parser.add_argument("--hybrid", action="store_true", help="Enable Hybrid retrieval (Dense + Sparse BM25 RRF)")
 
+    # Evaluate command (Step 11)
+    eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
+    eval_parser.add_argument("--file", type=str, default="data/evaluation/rag_eval.json", help="Path to evaluation dataset")
+    eval_parser.add_argument("--top-k", type=int, default=5, help="Top-K for evaluation")
+    eval_parser.add_argument("--skip-generation", action="store_true", help="Evaluate retrieval only")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -463,6 +603,12 @@ def main():
             rerank=args.rerank,
             initial_candidates=args.candidates,
             hybrid=args.hybrid,
+        )
+    elif args.command == "evaluate":
+        cmd_evaluate(
+            eval_file=args.file,
+            top_k=args.top_k,
+            skip_generation=args.skip_generation,
         )
     else:
         parser.print_help()

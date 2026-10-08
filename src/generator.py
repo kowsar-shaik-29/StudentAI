@@ -126,11 +126,21 @@ GROUNDED ANSWER:"""
             safe_msg = _sanitize_error(str(e))
             raise RuntimeError(f"Google GenAI API server error during generation: {safe_msg}") from e
         except APIError as e:
+            last_error = e
+            # Handle transient 429 rate limits with backoff
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(4 * (attempt + 1))
+                continue
             safe_msg = _sanitize_error(str(e))
             raise RuntimeError(f"Google GenAI API error during generation: {safe_msg}") from e
         except Exception as e:
+            last_error = e
+            if "429" in str(e) and attempt < max_retries - 1:
+                time.sleep(4 * (attempt + 1))
+                continue
             safe_msg = _sanitize_error(str(e))
             raise RuntimeError(f"Unexpected error during generation: {safe_msg}") from e
+
 
     safe_msg = _sanitize_error(str(last_error))
     raise RuntimeError(f"Google GenAI API error during generation: {safe_msg}") from last_error
