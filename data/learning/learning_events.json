@@ -98,9 +98,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "0681ea66-34d8-4379-ada8-2026f2e7a771",
+    "event_id": "93ee10b2-81a2-48ab-92c9-0302e9636fed",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:11:19.420453+00:00",
+    "timestamp": "2026-10-08T16:33:26.970182+00:00",
     "query": "Quiz me on nonexistent topic",
     "topic": "General",
     "subtopic": "None",
@@ -112,9 +112,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "80443501-25ae-4290-954f-412eac0175ed",
+    "event_id": "004d9ceb-4c4a-447c-89c3-c2b28cbf1c05",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:11:19.434252+00:00",
+    "timestamp": "2026-10-08T16:33:26.984826+00:00",
     "query": "Explain quantum computing",
     "topic": "Quantum Computing",
     "subtopic": "General",
@@ -126,9 +126,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "6fd945bc-739f-41bf-8290-e45054d91193",
+    "event_id": "b1967ade-2072-402a-b6d3-91df178fb58b",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:11:19.467794+00:00",
+    "timestamp": "2026-10-08T16:33:26.998285+00:00",
     "query": "Explain star topology",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -140,9 +140,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "3efb2b54-b536-487d-9a3b-b5c5c999dc1f",
+    "event_id": "6801dbcc-924a-4244-8829-7f163ea6175c",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:11:19.503015+00:00",
+    "timestamp": "2026-10-08T16:33:27.020900+00:00",
     "query": "TCP vs UDP",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -154,9 +154,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "264a521f-6ca8-4f10-918b-2b356c1e5ac4",
+    "event_id": "c19c6e05-2090-43a8-9d72-60c685276dbe",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:11:19.526678+00:00",
+    "timestamp": "2026-10-08T16:33:27.043544+00:00",
     "query": "Quiz me on ACID",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -168,9 +168,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "3ab792d8-e0d8-4aac-900e-05564038f39d",
+    "event_id": "317b4939-8160-4eca-afe7-0b47b09e8970",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:22:12.798806+00:00",
+    "timestamp": "2026-10-08T16:33:50.235242+00:00",
     "query": "Quiz me on nonexistent topic",
     "topic": "General",
     "subtopic": "None",
@@ -182,9 +182,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "03f5e523-06bf-4a42-a578-63b9dac68f90",
+    "event_id": "b43e1181-9f60-4d28-b3a3-9841c66bc56e",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:22:12.817443+00:00",
+    "timestamp": "2026-10-08T16:33:50.258829+00:00",
     "query": "Explain quantum computing",
     "topic": "Quantum Computing",
     "subtopic": "General",
@@ -196,9 +196,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "a8260ccb-e267-44cf-a8b8-aa037dcf3539",
+    "event_id": "80e2efe7-6301-4c69-8176-bf1314292023",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:22:12.834143+00:00",
+    "timestamp": "2026-10-08T16:33:50.274350+00:00",
     "query": "Explain star topology",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -210,9 +210,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "134023cc-4598-4151-baa1-32e33ede8ab3",
+    "event_id": "2f26ce9f-4695-45b8-ac94-e837b7184da0",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:22:12.866385+00:00",
+    "timestamp": "2026-10-08T16:33:50.296443+00:00",
     "query": "TCP vs UDP",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -224,9 +224,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "aacc202f-aa8f-4fa2-9e46-4538572846e2",
+    "event_id": "78eeaa6a-68a9-4863-8d10-7c4b4738b138",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:22:12.932112+00:00",
+    "timestamp": "2026-10-08T16:33:50.324235+00:00",
     "query": "Quiz me on ACID",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -238,9 +238,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "bf5948c8-d1ca-4626-91e2-1ba63f833e9c",
+    "event_id": "a79ca175-a218-4242-832d-b4e5efd81867",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:23:21.524595+00:00",
+    "timestamp": "2026-10-08T16:34:34.792598+00:00",
     "query": "Quiz me on nonexistent topic",
     "topic": "General",
     "subtopic": "None",
@@ -252,9 +252,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "65ee8782-b1fa-4a47-bb7d-9dc66081cea6",
+    "event_id": "77392eea-8416-469c-8128-5fdf9d24e086",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:23:21.561342+00:00",
+    "timestamp": "2026-10-08T16:34:34.807995+00:00",
     "query": "Explain quantum computing",
     "topic": "Quantum Computing",
     "subtopic": "General",
@@ -266,9 +266,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "bf1292ce-a302-44b2-a9e5-89703a032698",
+    "event_id": "3ce72202-93a6-443c-88e2-8826f03669cc",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:23:21.577186+00:00",
+    "timestamp": "2026-10-08T16:34:34.819523+00:00",
     "query": "Explain star topology",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -280,9 +280,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "a010356b-c5f1-449d-92c7-aa361d0cc90e",
+    "event_id": "a0736788-42c4-4304-8358-b6c64fb1b075",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:23:21.599271+00:00",
+    "timestamp": "2026-10-08T16:34:34.840593+00:00",
     "query": "TCP vs UDP",
     "topic": "Computer Science",
     "subtopic": "General",
@@ -294,79 +294,9 @@
     "questions_incorrect": 0
   },
   {
-    "event_id": "ed9d0ef6-40c5-49ba-b56e-bf0863ff076c",
+    "event_id": "a5377c9e-7dec-4758-ab88-82c9596cc5fe",
     "user_id": "default_user",
-    "timestamp": "2026-10-08T16:23:21.630151+00:00",
-    "query": "Quiz me on ACID",
-    "topic": "Computer Science",
-    "subtopic": "General",
-    "intent": "QUIZ",
-    "status": "QUIZ_GENERATED",
-    "sources_count": 1,
-    "questions_attempted": 0,
-    "questions_correct": 0,
-    "questions_incorrect": 0
-  },
-  {
-    "event_id": "7bd8eb08-5683-4149-934c-01cd443df6d1",
-    "user_id": "default_user",
-    "timestamp": "2026-10-08T16:24:14.561588+00:00",
-    "query": "Quiz me on nonexistent topic",
-    "topic": "General",
-    "subtopic": "None",
-    "intent": "QUIZ",
-    "status": "QUIZ_GENERATED",
-    "sources_count": 0,
-    "questions_attempted": 0,
-    "questions_correct": 0,
-    "questions_incorrect": 0
-  },
-  {
-    "event_id": "c6a35202-b54f-40e9-80e4-93046a27c6e1",
-    "user_id": "default_user",
-    "timestamp": "2026-10-08T16:24:14.579350+00:00",
-    "query": "Explain quantum computing",
-    "topic": "Quantum Computing",
-    "subtopic": "General",
-    "intent": "EXPLAIN",
-    "status": "REFUSED",
-    "sources_count": 0,
-    "questions_attempted": 0,
-    "questions_correct": 0,
-    "questions_incorrect": 0
-  },
-  {
-    "event_id": "5ef542ee-dcc5-4961-a531-707004045072",
-    "user_id": "default_user",
-    "timestamp": "2026-10-08T16:24:14.593479+00:00",
-    "query": "Explain star topology",
-    "topic": "Computer Science",
-    "subtopic": "General",
-    "intent": "EXPLAIN",
-    "status": "ANSWERED",
-    "sources_count": 1,
-    "questions_attempted": 0,
-    "questions_correct": 0,
-    "questions_incorrect": 0
-  },
-  {
-    "event_id": "54fed506-f27a-4a6a-a4f0-3bb1a4b6142b",
-    "user_id": "default_user",
-    "timestamp": "2026-10-08T16:24:14.615819+00:00",
-    "query": "TCP vs UDP",
-    "topic": "Computer Science",
-    "subtopic": "General",
-    "intent": "COMPARE",
-    "status": "ANSWERED",
-    "sources_count": 1,
-    "questions_attempted": 0,
-    "questions_correct": 0,
-    "questions_incorrect": 0
-  },
-  {
-    "event_id": "570eaa53-1ba3-43e2-9597-bba6e9e842bc",
-    "user_id": "default_user",
-    "timestamp": "2026-10-08T16:24:14.643554+00:00",
+    "timestamp": "2026-10-08T16:34:34.864826+00:00",
     "query": "Quiz me on ACID",
     "topic": "Computer Science",
     "subtopic": "General",

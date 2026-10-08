@@ -139,3 +139,28 @@ Step 16 turns learning analytics into deterministic, actionable study recommenda
 - **CLI Commands**:
   - `python -m src.main recommendations [--limit 5] [--topic <TOPIC>]`: View prioritized study recommendations and actions.
   - `python -m src.main learning-profile`: Full student profile detailing weak topics, strong topics, diagnostic needs, and actionable next steps.
+
+---
+
+## Step 17: Study Planner + Revision Engine
+
+Step 17 turns learning analytics and personalized recommendations into deterministic, actionable multi-day study schedules and prioritized revision queues:
+- **Study Planner (`src/study_planner.py`)**:
+  - `create_study_plan(subject, days, user_id="default_user", daily_minutes=60)`: Deterministically partitions study time across days.
+  - Multi-day strategy: Distributes prioritized weak topics, revisits high-weakness topics with focused quizzes on Day 3, schedules mixed active recall revision on the penultimate day, and comprehensive mock tests on the final day.
+  - Strict time allocation: Guarantees the sum of daily activities equals `daily_minutes` and never exceeds it.
+  - Validation: Strictly enforces `1 <= days <= 365` and `1 <= daily_minutes <= 1440`.
+  - Persistence: Automatically persists plans to `data/learning/study_plans.json` with `plan_id`, `created_at`, `days`, `daily_minutes`, and `plan`.
+- **Revision Engine (`src/revision_engine.py`)**:
+  - `get_revision_recommendations(user_id="default_user", subject=None, limit=5)`: Computes focused revision queues sorted by weakness priority and accuracy.
+- **Activity Types**:
+  - `REVIEW`: In-depth concept review.
+  - `PRACTICE`: Problem solving and exercise sets.
+  - `QUIZ`: Timed targeted assessment.
+  - `DIAGNOSTIC`: Baseline measurement for topics with insufficient quiz data.
+  - `REVISION`: Active recall and formula review.
+  - `MOCK_TEST`: Comprehensive exam simulation.
+- **CLI Commands**:
+  - `python -m src.main study-plan --subject <SUBJECT> [--days 7] [--minutes 60]`: Generate a structured study schedule.
+  - `python -m src.main revision [--subject <SUBJECT>] [--limit 5]`: View prioritized revision recommendations.
+  - `python -m src.main study-plans`: Inspect saved study plans.

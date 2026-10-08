@@ -1,0 +1,639 @@
+[
+  {
+    "plan_id": "69cf0f0d-fa58-4ae6-88cf-4a46090fedc4",
+    "user_id": "default_user",
+    "subject": "DBMS",
+    "created_at": "2026-10-08T16:31:28.377429+00:00",
+    "days": 7,
+    "daily_minutes": 60,
+    "plan": [
+      {
+        "day": 1,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Detailed review of Database Management Systems",
+            "minutes": 27
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Guided practice problems on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Focused assessment quiz on Database Management Systems",
+            "minutes": 18
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "ACID Properties",
+            "priority": "INSUFFICIENT_DATA",
+            "sources": [
+              "database_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Quick overview of ACID Properties",
+            "minutes": 24
+          },
+          {
+            "type": "DIAGNOSTIC",
+            "description": "Diagnostic quiz to measure baseline understanding of ACID Properties",
+            "minutes": 36
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "strategy": "revisit_quiz",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Review complex concepts in Database Management Systems",
+            "minutes": 24
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Solve challenging practice questions on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Take timed targeted quiz on Database Management Systems",
+            "minutes": 21
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "ACID Properties",
+            "priority": "INSUFFICIENT_DATA",
+            "sources": [
+              "database_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Quick overview of ACID Properties",
+            "minutes": 24
+          },
+          {
+            "type": "DIAGNOSTIC",
+            "description": "Diagnostic quiz to measure baseline understanding of ACID Properties",
+            "minutes": 36
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Detailed review of Database Management Systems",
+            "minutes": 27
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Guided practice problems on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Focused assessment quiz on Database Management Systems",
+            "minutes": 18
+          }
+        ]
+      },
+      {
+        "day": 6,
+        "strategy": "mixed_revision",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Active recall summary and formula review of Database Management Systems",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Mixed problem set on Database Management Systems",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 7,
+        "strategy": "mock_test",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "MOCK_TEST",
+            "description": "Comprehensive mock test covering Database Management Systems",
+            "minutes": 36
+          },
+          {
+            "type": "REVISION",
+            "description": "Post-mock answer review and error analysis",
+            "minutes": 24
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "plan_id": "4df04b1c-1f03-4f15-9228-645b2f03b2e0",
+    "user_id": "default_user",
+    "subject": "Computer Networks",
+    "created_at": "2026-10-08T16:31:49.253393+00:00",
+    "days": 7,
+    "daily_minutes": 60,
+    "plan": [
+      {
+        "day": 1,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Quick review of key definitions in TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Reinforcement exercises on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Quick review of key definitions in TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Reinforcement exercises on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Quick review of key definitions in TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Reinforcement exercises on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Quick review of key definitions in TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Reinforcement exercises on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Quick review of key definitions in TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Reinforcement exercises on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 6,
+        "strategy": "mixed_revision",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Active recall summary and formula review of TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Mixed problem set on TCP / Three-Way Handshake",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 7,
+        "strategy": "mock_test",
+        "focus": [
+          {
+            "topic": "Computer Networks",
+            "subtopic": "TCP / Three-Way Handshake",
+            "priority": "LOW",
+            "sources": [
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "MOCK_TEST",
+            "description": "Comprehensive mock test covering TCP / Three-Way Handshake",
+            "minutes": 36
+          },
+          {
+            "type": "REVISION",
+            "description": "Post-mock answer review and error analysis",
+            "minutes": 24
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "plan_id": "f2435b05-fb47-4508-b110-5a9c1c1968c0",
+    "user_id": "default_user",
+    "subject": "DBMS",
+    "created_at": "2026-10-08T16:34:12.322418+00:00",
+    "days": 7,
+    "daily_minutes": 60,
+    "plan": [
+      {
+        "day": 1,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Detailed review of Database Management Systems",
+            "minutes": 27
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Guided practice problems on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Focused assessment quiz on Database Management Systems",
+            "minutes": 18
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "ACID Properties",
+            "priority": "INSUFFICIENT_DATA",
+            "sources": [
+              "database_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Quick overview of ACID Properties",
+            "minutes": 24
+          },
+          {
+            "type": "DIAGNOSTIC",
+            "description": "Diagnostic quiz to measure baseline understanding of ACID Properties",
+            "minutes": 36
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "strategy": "revisit_quiz",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Review complex concepts in Database Management Systems",
+            "minutes": 24
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Solve challenging practice questions on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Take timed targeted quiz on Database Management Systems",
+            "minutes": 21
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "ACID Properties",
+            "priority": "INSUFFICIENT_DATA",
+            "sources": [
+              "database_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Quick overview of ACID Properties",
+            "minutes": 24
+          },
+          {
+            "type": "DIAGNOSTIC",
+            "description": "Diagnostic quiz to measure baseline understanding of ACID Properties",
+            "minutes": 36
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "strategy": "standard",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVIEW",
+            "description": "Detailed review of Database Management Systems",
+            "minutes": 27
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Guided practice problems on Database Management Systems",
+            "minutes": 15
+          },
+          {
+            "type": "QUIZ",
+            "description": "Focused assessment quiz on Database Management Systems",
+            "minutes": 18
+          }
+        ]
+      },
+      {
+        "day": 6,
+        "strategy": "mixed_revision",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "REVISION",
+            "description": "Active recall summary and formula review of Database Management Systems",
+            "minutes": 36
+          },
+          {
+            "type": "PRACTICE",
+            "description": "Mixed problem set on Database Management Systems",
+            "minutes": 24
+          }
+        ]
+      },
+      {
+        "day": 7,
+        "strategy": "mock_test",
+        "focus": [
+          {
+            "topic": "DBMS",
+            "subtopic": "Database Management Systems",
+            "priority": "HIGH",
+            "sources": [
+              "database_notes.pdf",
+              "computer_networking_notes.pdf"
+            ]
+          }
+        ],
+        "estimated_minutes": 60,
+        "activities": [
+          {
+            "type": "MOCK_TEST",
+            "description": "Comprehensive mock test covering Database Management Systems",
+            "minutes": 36
+          },
+          {
+            "type": "REVISION",
+            "description": "Post-mock answer review and error analysis",
+            "minutes": 24
+          }
+        ]
+      }
+    ]
+  }
+]

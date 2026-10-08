@@ -55,6 +55,14 @@ from src.recommendation_engine import (
     get_learning_recommendations,
     get_learning_profile,
 )
+from src.study_planner import (
+    create_study_plan,
+    get_study_plans,
+    get_latest_study_plan,
+)
+from src.revision_engine import (
+    get_revision_recommendations,
+)
 
 
 
@@ -753,6 +761,96 @@ def cmd_learning_profile() -> None:
     print("=" * 70)
 
 
+def cmd_study_plan(subject: str, days: int = 7, minutes: int = 60) -> None:
+    """Generates and displays an academic study plan."""
+    print("=" * 70)
+    print("STUDENTAI STUDY PLAN")
+    print("=" * 70)
+    print(f"Subject:    {subject}")
+    print(f"Duration:   {days} days")
+    print(f"Daily time: {minutes} minutes")
+    print("=" * 70)
+
+    try:
+        plan_res = create_study_plan(
+            subject=subject,
+            days=days,
+            daily_minutes=minutes,
+        )
+    except Exception as err:
+        print(f"\nError creating study plan: {err}\n")
+        print("=" * 70)
+        sys.exit(1)
+
+    if plan_res.get("message") and not plan_res.get("plan"):
+        print(f"\n{plan_res['message']}\n")
+        print("=" * 70)
+        return
+
+    days_plan = plan_res.get("plan", [])
+    for d in days_plan:
+        focus_topics = ", ".join(f"{f['topic']} / {f['subtopic']}" for f in d.get("focus", []))
+        print(f"\nDay {d['day']}")
+        print("-" * 70)
+        print(f"Focus: {focus_topics}")
+        for idx, a in enumerate(d.get("activities", []), start=1):
+            print(f"{idx}. {a['description']:<50} {a['minutes']} min")
+        print(f"Total: {d.get('estimated_minutes', minutes)} min")
+
+    print("\n" + "=" * 70)
+
+
+def cmd_revision(subject: Optional[str] = None, limit: int = 5) -> None:
+    """Displays prioritized revision recommendations."""
+    print("=" * 70)
+    print("STUDENTAI REVISION RECOMMENDATIONS")
+    print("=" * 70)
+    if subject:
+        print(f"Subject Filter: {subject}")
+        print("-" * 70)
+
+    rev_res = get_revision_recommendations(
+        subject=subject,
+        limit=limit,
+    )
+
+    items = rev_res.get("revision_items", [])
+    if not items:
+        msg = rev_res.get("message", "No revision items available.")
+        print(f"\n{msg}\n")
+        print("=" * 70)
+        return
+
+    print()
+    for idx, item in enumerate(items, start=1):
+        acc_str = f"{item['accuracy'] * 100:.0f}%" if item["accuracy"] is not None else "N/A"
+        print(f"{idx}. {item['topic']} / {item['subtopic']}")
+        print(f"   Priority: {item['priority']} (Quiz Accuracy: {acc_str})")
+        print(f"   Reason:   {item['reason']}")
+        print(f"   Action:   {item['recommended_activity']}")
+        if item.get("source_documents"):
+            print(f"   Sources:  {', '.join(item['source_documents'])}")
+        print()
+    print("=" * 70)
+
+
+def cmd_study_plans() -> None:
+    """Lists saved study plans."""
+    print("=" * 70)
+    print("SAVED STUDY PLANS")
+    print("=" * 70)
+    plans = get_study_plans()
+    if not plans:
+        print("\nNo saved study plans found.\n")
+    else:
+        for idx, p in enumerate(plans, start=1):
+            ts = p.get("created_at", "")[:19].replace("T", " ")
+            print(f"{idx}. [{ts}] Subject: {p.get('subject')} | Duration: {p.get('days')} days ({p.get('daily_minutes')} min/day)")
+            print(f"   Plan ID: {p.get('plan_id')}")
+            print()
+    print("=" * 70)
+
+
 def cmd_evaluate(
     eval_file: str = "data/evaluation/rag_eval.json",
     top_k: int = 5,
@@ -983,6 +1081,20 @@ def main():
     # Learning-profile command (Step 16: Personalized Learning Profile)
     subparsers.add_parser("learning-profile", help="Display structured personalized learning profile")
 
+    # Study-plan command (Step 17: Study Planner)
+    plan_parser = subparsers.add_parser("study-plan", help="Generate a structured multi-day academic study plan")
+    plan_parser.add_argument("--subject", type=str, required=True, help="Academic subject (e.g. DBMS, Computer Networks)")
+    plan_parser.add_argument("--days", type=int, default=7, help="Plan duration in days (default: 7)")
+    plan_parser.add_argument("--minutes", type=int, default=60, help="Daily study minutes (default: 60)")
+
+    # Revision command (Step 17: Revision Engine)
+    rev_parser = subparsers.add_parser("revision", help="Display prioritized revision recommendations")
+    rev_parser.add_argument("--subject", type=str, default=None, help="Filter revision items by academic subject")
+    rev_parser.add_argument("--limit", type=int, default=5, help="Maximum revision items (default: 5)")
+
+    # Study-plans command (Step 17: Study Plan Persistence)
+    subparsers.add_parser("study-plans", help="List saved study plans")
+
     # Evaluate command (Step 11)
     eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
     eval_parser.add_argument("--file", type=str, default="data/evaluation/rag_eval.json", help="Path to evaluation dataset")
@@ -1058,6 +1170,19 @@ def main():
         cmd_recommendations(limit=args.limit, topic=args.topic)
     elif args.command == "learning-profile":
         cmd_learning_profile()
+    elif args.command == "study-plan":
+        cmd_study_plan(
+            subject=args.subject,
+            days=args.days,
+            minutes=args.minutes,
+        )
+    elif args.command == "revision":
+        cmd_revision(
+            subject=args.subject,
+            limit=args.limit,
+        )
+    elif args.command == "study-plans":
+        cmd_study_plans()
     elif args.command == "evaluate":
         cmd_evaluate(
             eval_file=args.file,
