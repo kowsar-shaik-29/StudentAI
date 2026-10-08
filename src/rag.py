@@ -18,9 +18,11 @@ from typing import Dict, Any, Optional
 import qdrant_client
 from google import genai
 from src.retriever import search
+from src.hybrid_retriever import hybrid_search
 from src.context_builder import build_context
 from src.generator import generate_answer
 from src.vector_store import initialize_vector_store
+from src.sparse_retriever import SparseRetriever
 
 
 def answer_question(
@@ -31,6 +33,8 @@ def answer_question(
     collection_name: Optional[str] = None,
     rerank: bool = False,
     initial_candidates: Optional[int] = None,
+    hybrid: bool = False,
+    sparse_retriever: Optional[SparseRetriever] = None,
 ) -> Dict[str, Any]:
     """
     Executes complete end-to-end RAG pipeline for a given user question.
@@ -43,6 +47,9 @@ def answer_question(
         collection_name: Optional Qdrant collection override
         rerank: If True, applies second-stage reranking to retrieved candidates
         initial_candidates: Number of candidates to fetch if rerank=True
+        hybrid: If True, uses Hybrid (Dense + Sparse RRF) retrieval
+        sparse_retriever: Optional SparseRetriever instance
+
 
     Returns:
         Structured dictionary containing:
@@ -74,8 +81,16 @@ def answer_question(
     q_client = client or initialize_vector_store()
 
     try:
-        # Step 1: Semantic Retrieval (with optional Reranking)
-        if rerank:
+        # Step 1: Retrieval (Dense, Hybrid, with optional Reranking)
+        if hybrid:
+            retrieved_chunks = hybrid_search(
+                query=clean_question,
+                top_k=top_k,
+                client=q_client,
+                sparse_retriever=sparse_retriever,
+                collection_name=collection_name,
+            )
+        elif rerank:
             retrieved_chunks = search(
                 query=clean_question,
                 top_k=top_k,

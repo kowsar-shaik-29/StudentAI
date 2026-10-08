@@ -34,6 +34,8 @@ from src.vector_store import (
     get_collection_info,
 )
 from src.retriever import search
+from src.sparse_retriever import get_sparse_retriever
+from src.hybrid_retriever import hybrid_search
 from src.rag import answer_question
 from src.ingestion import ingest_document, ingest_directory
 
@@ -235,36 +237,60 @@ def cmd_search(
     preview_chars: int = 300,
     rerank: bool = False,
     initial_candidates: int = 10,
+    hybrid: bool = False,
+    sparse_only: bool = False,
 ) -> None:
-    """Executes semantic search in Qdrant given a natural language query with optional reranking."""
-    require_api_key()
+    """Executes search (dense, sparse, or hybrid) with optional reranking."""
+    clean_query = query.strip()
 
     print("=" * 60)
-    print("SEMANTIC SEARCH")
+    if hybrid:
+        print("HYBRID SEARCH (Dense + Sparse BM25 RRF)")
+    elif sparse_only:
+        print("SPARSE SEARCH (BM25 Lexical)")
+    else:
+        print("SEMANTIC SEARCH (Dense Vector)")
     print("=" * 60)
-    print(f"\nQuery:\n{query.strip()}\n")
+    print(f"\nQuery:\n{clean_query}\n")
 
-    if rerank:
-        print(f"Initial candidates:\n{initial_candidates}\n")
-        print(f"Final results:\n{top_k}\n")
+    if hybrid:
+        require_api_key()
+        q_client = initialize_vector_store()
+        try:
+            results = hybrid_search(
+                query=clean_query,
+                top_k=top_k,
+                client=q_client,
+                dense_candidates=initial_candidates,
+                sparse_candidates=initial_candidates,
+            )
+        finally:
+            q_client.close()
+    elif sparse_only:
+        sr = get_sparse_retriever()
+        results = sr.search(query=clean_query, top_k=top_k)
+    else:
+        require_api_key()
+        if rerank:
+            print(f"Initial candidates:\n{initial_candidates}\n")
+            print(f"Final results:\n{top_k}\n")
 
-    q_client = initialize_vector_store()
-    try:
-        results = search(
-            query=query.strip(),
-            top_k=top_k,
-            client=q_client,
-            rerank=rerank,
-            initial_candidates=initial_candidates,
-        )
-    finally:
-        q_client.close()
+        q_client = initialize_vector_store()
+        try:
+            results = search(
+                query=clean_query,
+                top_k=top_k,
+                client=q_client,
+                rerank=rerank,
+                initial_candidates=initial_candidates,
+            )
+        finally:
+            q_client.close()
 
     if not rerank:
         print(f"Results: {len(results)}\n")
 
     for i, res in enumerate(results, start=1):
-        score = res["score"]
         doc = res["file_name"]
         page = res["page_number"]
         chunk_id = res["chunk_id"]
@@ -276,9 +302,25 @@ def cmd_search(
 
         print("-" * 60)
         print(f"Result {i}")
-        if rerank:
-            print(f"Qdrant score:\n{score:.4f}\n")
-            rerank_score = res.get("rerank_score", score)
+        if hybrid:
+            print(f"Fused score (RRF): {res.get('fused_score', 0.0):.6f}")
+            print(f"Dense score:       {res.get('dense_score', 0.0):.4f}")
+            print(f"Sparse score:      {res.get('sparse_score', 0.0):.4f}")
+            print(f"Document:          {doc}")
+            print(f"Page:              {page}")
+            print(f"Chunk:             {chunk_id}")
+            print("Text:")
+            print(preview_text)
+        elif sparse_only:
+            print(f"Sparse score (BM25): {res.get('sparse_score', 0.0):.4f}")
+            print(f"Document:            {doc}")
+            print(f"Page:                {page}")
+            print(f"Chunk:               {chunk_id}")
+            print("Text:")
+            print(preview_text)
+        elif rerank:
+            print(f"Qdrant score:\n{res.get('score', 0.0):.4f}\n")
+            rerank_score = res.get("rerank_score", res.get("score", 0.0))
             print(f"Reranker score:\n{rerank_score:.4f}\n")
             print(f"Document:\n{doc}\n")
             print(f"Page:\n{page}\n")
@@ -286,7 +328,7 @@ def cmd_search(
             print("Text:")
             print(preview_text)
         else:
-            print(f"Score:    {score:.4f}")
+            print(f"Score:    {res.get('score', 0.0):.4f}")
             print(f"Document: {doc}")
             print(f"Page:     {page}")
             print(f"Chunk ID: {chunk_id}")
@@ -302,15 +344,18 @@ def cmd_ask(
     top_k: int = 5,
     rerank: bool = False,
     initial_candidates: int = 10,
+    hybrid: bool = False,
 ) -> None:
-    """Executes end-to-end RAG question answering with optional reranking."""
+    """Executes end-to-end RAG question answering with optional reranking or hybrid retrieval."""
     require_api_key()
 
     print("=" * 60)
     print("STUDENTAI RAG")
     print("=" * 60)
     print(f"\nQuestion:\n{question.strip()}\n")
-    if rerank:
+    if hybrid:
+        print("Retrieval Mode: Hybrid (Dense + Sparse BM25 RRF)\n")
+    elif rerank:
         print(f"Reranking: Enabled (Candidates: {initial_candidates} -> Top: {top_k})\n")
 
     result = answer_question(
@@ -318,6 +363,7 @@ def cmd_ask(
         top_k=top_k,
         rerank=rerank,
         initial_candidates=initial_candidates,
+        hybrid=hybrid,
     )
 
     print("-" * 60)
@@ -332,7 +378,7 @@ def cmd_ask(
     for i, src in enumerate(result["sources"], start=1):
         print(f"{i}. {src['file_name']}")
         print(f"   Page:  {src['page_number']}")
-        print(f"   Qdrant Score: {src['score']:.4f}")
+        print(f"   Score: {src['score']:.4f}")
         if "rerank_score" in src:
             print(f"   Rerank Score: {src['rerank_score']:.4f}")
         print(f"   Chunk: {src['chunk_id']}")
@@ -372,19 +418,22 @@ def main():
     ingest_dir_parser = subparsers.add_parser("ingest-dir", help="Ingest all PDFs in a directory into Qdrant")
     ingest_dir_parser.add_argument("directory_path", type=str, help="Path to the directory containing PDFs")
 
-    # Search command (Step 6 & Step 9)
-    search_parser = subparsers.add_parser("search", help="Execute semantic retrieval search against Qdrant")
+    # Search command (Step 6, Step 9, Step 10)
+    search_parser = subparsers.add_parser("search", help="Execute semantic, sparse, or hybrid retrieval")
     search_parser.add_argument("query", type=str, help="Search query string")
     search_parser.add_argument("--top-k", type=int, default=5, help="Number of results to retrieve")
     search_parser.add_argument("--rerank", action="store_true", help="Enable second-stage relevance reranking")
-    search_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking")
+    search_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking/hybrid")
+    search_parser.add_argument("--hybrid", action="store_true", help="Enable Hybrid retrieval (Dense + Sparse BM25 RRF)")
+    search_parser.add_argument("--sparse", action="store_true", help="Run BM25 sparse retrieval only")
 
-    # Ask command (Step 7 & Step 9)
+    # Ask command (Step 7, Step 9, Step 10)
     ask_parser = subparsers.add_parser("ask", help="Ask a question and generate a grounded, cited RAG answer")
     ask_parser.add_argument("question", type=str, help="Question to answer")
     ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
     ask_parser.add_argument("--rerank", action="store_true", help="Enable second-stage relevance reranking")
-    ask_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking")
+    ask_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates")
+    ask_parser.add_argument("--hybrid", action="store_true", help="Enable Hybrid retrieval (Dense + Sparse BM25 RRF)")
 
     args = parser.parse_args()
 
@@ -404,6 +453,8 @@ def main():
             top_k=args.top_k,
             rerank=args.rerank,
             initial_candidates=args.candidates,
+            hybrid=args.hybrid,
+            sparse_only=args.sparse,
         )
     elif args.command == "ask":
         cmd_ask(
@@ -411,6 +462,7 @@ def main():
             top_k=args.top_k,
             rerank=args.rerank,
             initial_candidates=args.candidates,
+            hybrid=args.hybrid,
         )
     else:
         parser.print_help()

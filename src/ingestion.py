@@ -27,6 +27,8 @@ from src.vector_store import (
     upsert_chunks,
     count_vectors,
 )
+from src.sparse_retriever import get_sparse_retriever
+
 
 
 def ingest_document(
@@ -104,6 +106,11 @@ def ingest_document(
     finally:
         if client is None:
             q_client.close()
+
+    # 5. Storage in Sparse BM25 Index (Same chunks and metadata)
+    sparse_retriever = get_sparse_retriever()
+    sparse_retriever.index_chunks(chunks, auto_save=True)
+
 
     return {
         "file_name": path.name,

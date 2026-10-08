@@ -40,6 +40,10 @@ class Settings:
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
+    # Sparse Index Configuration
+    sparse_index_dir: Path = BASE_DIR / os.getenv("SPARSE_INDEX_DIR", "data/sparse_index")
+
+
 
 def get_settings() -> Settings:
     """Returns the application settings."""
