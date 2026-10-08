@@ -1,12 +1,13 @@
 """
 CLI Entry Point for StudentAI.
-Provides commands to inspect configuration, extract PDF text, chunk documents, index vectors, and query.
+Provides commands to inspect configuration, extract PDF text, chunk documents, index vectors, search, and query.
 
 Usage:
   python -m src.main status
   python -m src.main extract <path-to-pdf>
   python -m src.main chunk <path-to-pdf>
   python -m src.main index <path-to-pdf>
+  python -m src.main search "<question>" [--top-k 5]
   python -m src.main query "Your question here"
 """
 
@@ -33,7 +34,7 @@ from src.vector_store import (
     count_vectors,
     get_collection_info,
 )
-from src.retriever import retrieve_context
+from src.retriever import search, retrieve_context
 from src.generator import generate_rag_answer
 
 
@@ -176,10 +177,7 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
 
 
 def cmd_index(pdf_path: str) -> None:
-    """
-    Step 5: Executes full indexing pipeline:
-    PDF -> extract -> chunk -> embed -> store in local Qdrant.
-    """
+    """Executes full indexing pipeline: PDF -> extract -> chunk -> embed -> store in Qdrant."""
     require_api_key()
     settings = get_settings()
     path = Path(pdf_path)
@@ -226,6 +224,50 @@ def cmd_index(pdf_path: str) -> None:
     print(f"Total in DB:      {total_in_collection}")
     print("=" * 60)
     print("Indexing completed successfully!")
+
+
+def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
+    """
+    Step 6: Executes semantic search in Qdrant given a natural language query.
+    Does NOT call Gemini generation.
+    """
+    require_api_key()
+
+    print("=" * 60)
+    print("SEMANTIC SEARCH")
+    print("=" * 60)
+    print(f"\nQuery:\n{query.strip()}\n")
+
+    q_client = initialize_vector_store()
+    try:
+        results = search(query=query.strip(), top_k=top_k, client=q_client)
+    finally:
+        q_client.close()
+
+    print(f"Results: {len(results)}\n")
+
+    for i, res in enumerate(results, start=1):
+        score = res["score"]
+        doc = res["file_name"]
+        page = res["page_number"]
+        chunk_id = res["chunk_id"]
+        raw_text = res["text"].strip().replace("\r", "")
+
+        preview_text = raw_text[:preview_chars]
+        if len(raw_text) > preview_chars:
+            preview_text += "..."
+
+        print("-" * 60)
+        print(f"Result {i}")
+        print(f"Score:    {score:.4f}")
+        print(f"Document: {doc}")
+        print(f"Page:     {page}")
+        print(f"Chunk ID: {chunk_id}")
+        print("Text:")
+        print(preview_text)
+        print()
+
+    print("=" * 60)
 
 
 def cmd_query(question: str, top_k: int = 4) -> None:
@@ -286,7 +328,12 @@ def main():
     ingest_parser = subparsers.add_parser("ingest", help="Alias for index")
     ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
 
-    # Query command
+    # Search command (Step 6)
+    search_parser = subparsers.add_parser("search", help="Execute semantic retrieval search against Qdrant")
+    search_parser.add_argument("query", type=str, help="Search query string")
+    search_parser.add_argument("--top-k", type=int, default=5, help="Number of results to retrieve")
+
+    # Query command (RAG answer generation)
     query_parser = subparsers.add_parser("query", help="Ask a question against indexed documents")
     query_parser.add_argument("question", type=str, help="Question to answer")
     query_parser.add_argument("--top-k", type=int, default=4, help="Number of chunks to retrieve")
@@ -301,6 +348,8 @@ def main():
         cmd_chunk(args.pdf_path, chunk_size=args.chunk_size, overlap=args.overlap)
     elif args.command in ("index", "ingest"):
         cmd_index(args.pdf_path)
+    elif args.command == "search":
+        cmd_search(args.query, top_k=args.top_k)
     elif args.command == "query":
         cmd_query(args.question, top_k=args.top_k)
     else:

@@ -58,6 +58,9 @@ def embed_text(
     Returns:
         List of floats representing the embedding vector.
     """
+    if not text or not text.strip():
+        raise ValueError("Text to embed cannot be empty or whitespace only")
+
     settings = get_settings()
     active_client = client or get_genai_client()
     active_model = model or settings.embedding_model
@@ -71,7 +74,7 @@ def embed_text(
     try:
         response = active_client.models.embed_content(
             model=active_model,
-            contents=text,
+            contents=text.strip(),
             config=config,
         )
     except APIError as e:
@@ -109,7 +112,6 @@ def _embed_single_batch(
         task_type=task_type,
     )
 
-    # Wrap each text string in its own Content object to ensure separate embeddings
     content_items = [
         types.Content(parts=[types.Part(text=t)])
         for t in texts
@@ -159,17 +161,6 @@ def embed_batch(
     """
     Generates embeddings for a batch of text strings, chunking requests into
     sub-batches if necessary to respect API limits.
-
-    Args:
-        texts: List of strings to embed.
-        client: Optional pre-authenticated GenAI client.
-        model: Optional model name override.
-        output_dim: Optional embedding dimension override.
-        task_type: Optional task type (defaults to RETRIEVAL_DOCUMENT).
-        batch_size: Max texts per individual API request (defaults to 20).
-
-    Returns:
-        List of embedding vectors.
     """
     if not texts:
         return []
@@ -181,7 +172,6 @@ def embed_batch(
 
     all_vectors: List[List[float]] = []
 
-    # Process in manageable sub-batches
     for i in range(0, len(texts), batch_size):
         sub_batch = texts[i : i + batch_size]
         sub_vectors = _embed_single_batch(
@@ -227,16 +217,6 @@ def embed_chunks(
     """
     Generates embeddings for a list of document chunks and attaches each embedding
     to a copy of the corresponding chunk dictionary while preserving all metadata.
-
-    Args:
-        chunks: List of chunk dictionaries produced by chunker.py
-        client: Optional pre-authenticated GenAI client
-        model: Optional model override
-        output_dim: Optional dimension override
-        batch_size: Max chunks per API request
-
-    Returns:
-        List of chunk dictionaries with all original metadata plus the 'embedding' key.
     """
     if not chunks:
         return []
@@ -252,7 +232,7 @@ def embed_chunks(
 
     enriched_chunks: List[Dict[str, Any]] = []
     for chunk, emb in zip(chunks, embeddings):
-        item = dict(chunk)  # Preserve original dictionary and copy
+        item = dict(chunk)
         item["embedding"] = emb
         enriched_chunks.append(item)
 
@@ -266,11 +246,23 @@ def embed_query(
     output_dim: Optional[int] = None,
 ) -> List[float]:
     """
-    Generates dense embedding for a user search query.
-    Enforces task_type='RETRIEVAL_QUERY'.
+    Generates dense vector embedding for a user search query.
+    Enforces task_type='RETRIEVAL_QUERY' and output_dimensionality=768.
+
+    Args:
+        query: User search query string
+        client: Optional pre-authenticated GenAI client
+        model: Optional model override (defaults to gemini-embedding-2)
+        output_dim: Optional dimension override (defaults to 768)
+
+    Returns:
+        List of 768 floats representing the query embedding.
     """
+    if not query or not query.strip():
+        raise ValueError("Query string cannot be empty or whitespace only")
+
     return embed_text(
-        text=query,
+        text=query.strip(),
         client=client,
         model=model,
         output_dim=output_dim,
