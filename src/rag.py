@@ -29,6 +29,8 @@ def answer_question(
     client: Optional[qdrant_client.QdrantClient] = None,
     genai_client: Optional[genai.Client] = None,
     collection_name: Optional[str] = None,
+    rerank: bool = False,
+    initial_candidates: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Executes complete end-to-end RAG pipeline for a given user question.
@@ -39,6 +41,8 @@ def answer_question(
         client: Optional pre-initialized QdrantClient
         genai_client: Optional pre-authenticated GenAI client
         collection_name: Optional Qdrant collection override
+        rerank: If True, applies second-stage reranking to retrieved candidates
+        initial_candidates: Number of candidates to fetch if rerank=True
 
     Returns:
         Structured dictionary containing:
@@ -70,13 +74,24 @@ def answer_question(
     q_client = client or initialize_vector_store()
 
     try:
-        # Step 1: Semantic Retrieval
-        retrieved_chunks = search(
-            query=clean_question,
-            top_k=top_k,
-            client=q_client,
-            collection_name=collection_name,
-        )
+        # Step 1: Semantic Retrieval (with optional Reranking)
+        if rerank:
+            retrieved_chunks = search(
+                query=clean_question,
+                top_k=top_k,
+                client=q_client,
+                collection_name=collection_name,
+                rerank=True,
+                initial_candidates=initial_candidates,
+                genai_client=genai_client,
+            )
+        else:
+            retrieved_chunks = search(
+                query=clean_question,
+                top_k=top_k,
+                client=q_client,
+                collection_name=collection_name,
+            )
     finally:
         # Close client only if created locally inside this function
         if client is None:
@@ -93,19 +108,22 @@ def answer_question(
     )
 
     # Step 4: Package clean sources (excluding raw vectors)
-    sources = [
-        {
+    sources = []
+    for item in retrieved_chunks:
+        src_entry = {
             "score": item["score"],
             "file_name": item["file_name"],
             "page_number": item["page_number"],
             "chunk_id": item["chunk_id"],
             "text": item["text"],
         }
-        for item in retrieved_chunks
-    ]
+        if "rerank_score" in item:
+            src_entry["rerank_score"] = item["rerank_score"]
+        sources.append(src_entry)
 
     return {
         "question": clean_question,
         "answer": answer_text,
         "sources": sources,
     }
+

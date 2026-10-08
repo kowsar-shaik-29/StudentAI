@@ -229,8 +229,14 @@ def cmd_ingest_dir(directory_path: str) -> None:
     print("=" * 60)
 
 
-def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
-    """Executes semantic search in Qdrant given a natural language query."""
+def cmd_search(
+    query: str,
+    top_k: int = 5,
+    preview_chars: int = 300,
+    rerank: bool = False,
+    initial_candidates: int = 10,
+) -> None:
+    """Executes semantic search in Qdrant given a natural language query with optional reranking."""
     require_api_key()
 
     print("=" * 60)
@@ -238,13 +244,24 @@ def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
     print("=" * 60)
     print(f"\nQuery:\n{query.strip()}\n")
 
+    if rerank:
+        print(f"Initial candidates:\n{initial_candidates}\n")
+        print(f"Final results:\n{top_k}\n")
+
     q_client = initialize_vector_store()
     try:
-        results = search(query=query.strip(), top_k=top_k, client=q_client)
+        results = search(
+            query=query.strip(),
+            top_k=top_k,
+            client=q_client,
+            rerank=rerank,
+            initial_candidates=initial_candidates,
+        )
     finally:
         q_client.close()
 
-    print(f"Results: {len(results)}\n")
+    if not rerank:
+        print(f"Results: {len(results)}\n")
 
     for i, res in enumerate(results, start=1):
         score = res["score"]
@@ -259,27 +276,49 @@ def cmd_search(query: str, top_k: int = 5, preview_chars: int = 300) -> None:
 
         print("-" * 60)
         print(f"Result {i}")
-        print(f"Score:    {score:.4f}")
-        print(f"Document: {doc}")
-        print(f"Page:     {page}")
-        print(f"Chunk ID: {chunk_id}")
-        print("Text:")
-        print(preview_text)
+        if rerank:
+            print(f"Qdrant score:\n{score:.4f}\n")
+            rerank_score = res.get("rerank_score", score)
+            print(f"Reranker score:\n{rerank_score:.4f}\n")
+            print(f"Document:\n{doc}\n")
+            print(f"Page:\n{page}\n")
+            print(f"Chunk:\n{chunk_id}\n")
+            print("Text:")
+            print(preview_text)
+        else:
+            print(f"Score:    {score:.4f}")
+            print(f"Document: {doc}")
+            print(f"Page:     {page}")
+            print(f"Chunk ID: {chunk_id}")
+            print("Text:")
+            print(preview_text)
         print()
 
     print("=" * 60)
 
 
-def cmd_ask(question: str, top_k: int = 5) -> None:
-    """Executes end-to-end RAG question answering."""
+def cmd_ask(
+    question: str,
+    top_k: int = 5,
+    rerank: bool = False,
+    initial_candidates: int = 10,
+) -> None:
+    """Executes end-to-end RAG question answering with optional reranking."""
     require_api_key()
 
     print("=" * 60)
     print("STUDENTAI RAG")
     print("=" * 60)
     print(f"\nQuestion:\n{question.strip()}\n")
+    if rerank:
+        print(f"Reranking: Enabled (Candidates: {initial_candidates} -> Top: {top_k})\n")
 
-    result = answer_question(question=question.strip(), top_k=top_k)
+    result = answer_question(
+        question=question.strip(),
+        top_k=top_k,
+        rerank=rerank,
+        initial_candidates=initial_candidates,
+    )
 
     print("-" * 60)
     print("ANSWER")
@@ -293,7 +332,9 @@ def cmd_ask(question: str, top_k: int = 5) -> None:
     for i, src in enumerate(result["sources"], start=1):
         print(f"{i}. {src['file_name']}")
         print(f"   Page:  {src['page_number']}")
-        print(f"   Score: {src['score']:.4f}")
+        print(f"   Qdrant Score: {src['score']:.4f}")
+        if "rerank_score" in src:
+            print(f"   Rerank Score: {src['rerank_score']:.4f}")
         print(f"   Chunk: {src['chunk_id']}")
         print()
 
@@ -331,15 +372,19 @@ def main():
     ingest_dir_parser = subparsers.add_parser("ingest-dir", help="Ingest all PDFs in a directory into Qdrant")
     ingest_dir_parser.add_argument("directory_path", type=str, help="Path to the directory containing PDFs")
 
-    # Search command (Step 6)
+    # Search command (Step 6 & Step 9)
     search_parser = subparsers.add_parser("search", help="Execute semantic retrieval search against Qdrant")
     search_parser.add_argument("query", type=str, help="Search query string")
     search_parser.add_argument("--top-k", type=int, default=5, help="Number of results to retrieve")
+    search_parser.add_argument("--rerank", action="store_true", help="Enable second-stage relevance reranking")
+    search_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking")
 
-    # Ask command (Step 7)
+    # Ask command (Step 7 & Step 9)
     ask_parser = subparsers.add_parser("ask", help="Ask a question and generate a grounded, cited RAG answer")
     ask_parser.add_argument("question", type=str, help="Question to answer")
     ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
+    ask_parser.add_argument("--rerank", action="store_true", help="Enable second-stage relevance reranking")
+    ask_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking")
 
     args = parser.parse_args()
 
@@ -354,9 +399,19 @@ def main():
     elif args.command == "ingest-dir":
         cmd_ingest_dir(args.directory_path)
     elif args.command == "search":
-        cmd_search(args.query, top_k=args.top_k)
+        cmd_search(
+            args.query,
+            top_k=args.top_k,
+            rerank=args.rerank,
+            initial_candidates=args.candidates,
+        )
     elif args.command == "ask":
-        cmd_ask(args.question, top_k=args.top_k)
+        cmd_ask(
+            args.question,
+            top_k=args.top_k,
+            rerank=args.rerank,
+            initial_candidates=args.candidates,
+        )
     else:
         parser.print_help()
 

@@ -15,6 +15,8 @@ import qdrant_client
 from src.config import get_settings
 from src.embedder import embed_query
 from src.vector_store import initialize_vector_store
+from src.reranker import rerank as rerank_fn
+from google import genai
 
 
 def search(
@@ -23,9 +25,13 @@ def search(
     client: Optional[qdrant_client.QdrantClient] = None,
     collection_name: Optional[str] = None,
     query_vector: Optional[List[float]] = None,
+    rerank: bool = False,
+    initial_candidates: Optional[int] = None,
+    genai_client: Optional[genai.Client] = None,
 ) -> List[Dict[str, Any]]:
     """
     Executes semantic vector search for a natural language user query.
+    Optionally reranks candidates using cross-evaluation relevance scoring.
 
     Args:
         query: User question or natural language query (must be non-empty)
@@ -33,12 +39,16 @@ def search(
         client: Optional pre-initialized QdrantClient instance
         collection_name: Optional collection name override
         query_vector: Optional pre-computed query vector (useful for testing/mocking)
+        rerank: If True, retrieves top candidates from Qdrant and applies second-stage reranking
+        initial_candidates: Number of candidate chunks to fetch before reranking (defaults to max(10, top_k * 2))
+        genai_client: Optional pre-authenticated GenAI client for reranking
 
     Returns:
-        List of dictionaries ranked by descending similarity score:
+        List of dictionaries ranked by descending similarity (or rerank_score if rerank=True):
         [
             {
                 "score": float,
+                "rerank_score": float,  # Present if rerank=True
                 "chunk_id": str,
                 "text": str,
                 "page_number": int,
@@ -59,6 +69,9 @@ def search(
 
     if not isinstance(top_k, int) or top_k <= 0:
         raise ValueError(f"top_k must be a positive integer greater than 0, got {top_k}")
+
+    if initial_candidates is not None and (not isinstance(initial_candidates, int) or initial_candidates <= 0):
+        raise ValueError(f"initial_candidates must be a positive integer greater than 0, got {initial_candidates}")
 
     settings = get_settings()
     target_collection = collection_name or settings.qdrant_collection_name
@@ -84,19 +97,27 @@ def search(
             f"Query embedding dimension mismatch: expected {settings.embedding_dim}, got {len(q_vec)}"
         )
 
-    # 5. Query Qdrant for Nearest Neighbors
+    # 5. Determine Number of Candidates to Fetch
+    # If rerank is enabled, retrieve Top-N initial candidates (e.g., initial_candidates or max(10, top_k * 2))
+    if rerank:
+        candidate_count = initial_candidates if initial_candidates is not None else max(10, top_k * 2)
+        fetch_limit = max(candidate_count, top_k)
+    else:
+        fetch_limit = top_k
+
+    # 6. Query Qdrant for Nearest Neighbors
     try:
         search_result = active_client.query_points(
             collection_name=target_collection,
             query=q_vec,
-            limit=top_k,
+            limit=fetch_limit,
             with_payload=True,
             with_vectors=False,  # Exclude heavy raw vectors from results
         )
     except Exception as e:
         raise RuntimeError(f"Qdrant query execution failed: {e}") from e
 
-    # 6. Format and Return Results with Metadata
+    # 7. Format Candidate Results with Metadata
     results: List[Dict[str, Any]] = []
     for point in search_result.points:
         payload = point.payload or {}
@@ -112,8 +133,18 @@ def search(
             "char_count": payload.get("char_count", len(text)),
         })
 
+    # 8. Apply Reranking if enabled
+    if rerank:
+        return rerank_fn(
+            query=query.strip(),
+            results=results,
+            top_k=top_k,
+            client=genai_client,
+        )
+
     return results
 
 
 # Backward compatibility alias
 retrieve_context = search
+
