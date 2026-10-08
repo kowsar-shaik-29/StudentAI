@@ -24,8 +24,8 @@ class Settings:
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
     # Model Configuration
-    # Official Google GenAI SDK embedding model
-    embedding_model: str = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
+    # Official Google GenAI SDK recommendation (GA successor to deprecated text-embedding-004)
+    embedding_model: str = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "768"))
 
     # Generation Model (Gemini 2.5 Flash offers strong reasoning with low latency)

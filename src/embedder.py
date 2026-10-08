@@ -3,12 +3,18 @@ Embedding Generation Module.
 Directly interfaces with Google GenAI SDK (google-genai) to generate dense vector embeddings.
 
 Core Concept:
-A text embedding maps natural language strings into high-dimensional numerical vectors (points in space).
-Texts with similar semantic meaning are situated closer together according to geometric distance (e.g. Cosine Similarity).
+A text embedding maps natural language strings into high-dimensional numerical vectors.
+Texts with similar semantic meaning are situated closer together according to geometric distance (Cosine Similarity).
+
+Model Details:
+- Model: `gemini-embedding-2` (Official GA embedding model).
+- Dimensionality: Supports Matryoshka Representation Learning (MRL), allowing flexible truncation
+  to 768 dimensions for optimal balance between storage, search speed, and accuracy.
 """
 
 from typing import List, Optional
 from google import genai
+from google.genai import types
 from src.config import get_settings, require_api_key
 
 
@@ -23,6 +29,7 @@ def embed_text(
     client: Optional[genai.Client] = None,
     model: Optional[str] = None,
     output_dim: Optional[int] = None,
+    task_type: Optional[str] = "RETRIEVAL_DOCUMENT",
 ) -> List[float]:
     """
     Generates a dense vector embedding for a single text string using Google GenAI SDK.
@@ -30,8 +37,9 @@ def embed_text(
     Args:
         text: Input string to embed.
         client: Optional pre-authenticated GenAI client.
-        model: Optional model name override.
-        output_dim: Optional embedding dimension override.
+        model: Optional model name override (defaults to gemini-embedding-2).
+        output_dim: Optional embedding dimension override (defaults to 768 via MRL).
+        task_type: Optional task type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
 
     Returns:
         List of floats representing the embedding vector.
@@ -41,18 +49,21 @@ def embed_text(
     active_model = model or settings.embedding_model
     dim = output_dim or settings.embedding_dim
 
-    config = {}
-    if dim:
-        config["output_dimensionality"] = dim
+    config = types.EmbedContentConfig(
+        output_dimensionality=dim,
+        task_type=task_type,
+    )
 
     response = active_client.models.embed_content(
         model=active_model,
         contents=text,
-        config=config if config else None,
+        config=config,
     )
 
-    # In google-genai SDK, response.embedding contains values: list[float]
-    return list(response.embedding.values)
+    if response.embeddings and len(response.embeddings) > 0:
+        return list(response.embeddings[0].values)
+    else:
+        raise ValueError("Received empty embeddings response from Google GenAI SDK")
 
 
 def embed_batch(
@@ -60,6 +71,7 @@ def embed_batch(
     client: Optional[genai.Client] = None,
     model: Optional[str] = None,
     output_dim: Optional[int] = None,
+    task_type: Optional[str] = "RETRIEVAL_DOCUMENT",
 ) -> List[List[float]]:
     """
     Generates embeddings for a batch of text strings.
@@ -69,6 +81,7 @@ def embed_batch(
         client: Optional pre-authenticated GenAI client.
         model: Optional model name override.
         output_dim: Optional embedding dimension override.
+        task_type: Optional task type.
 
     Returns:
         List of embedding vectors.
@@ -78,20 +91,18 @@ def embed_batch(
     active_model = model or settings.embedding_model
     dim = output_dim or settings.embedding_dim
 
-    config = {}
-    if dim:
-        config["output_dimensionality"] = dim
+    config = types.EmbedContentConfig(
+        output_dimensionality=dim,
+        task_type=task_type,
+    )
 
     response = active_client.models.embed_content(
         model=active_model,
         contents=texts,
-        config=config if config else None,
+        config=config,
     )
 
-    # When contents is a list, response.embeddings is a list of ContentEmbedding objects
-    if hasattr(response, "embeddings") and response.embeddings:
+    if response.embeddings:
         return [list(emb.values) for emb in response.embeddings]
-    elif hasattr(response, "embedding") and response.embedding:
-        return [list(response.embedding.values)]
     else:
-        raise ValueError("Unexpected embedding response format from Google GenAI SDK")
+        raise ValueError("Received empty embeddings response from Google GenAI SDK")
