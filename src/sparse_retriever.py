@@ -103,8 +103,13 @@ class SparseRetriever:
                 "page_number": chunk.get("page_number", 0),
                 "total_pages": chunk.get("total_pages", 0),
                 "file_name": chunk.get("file_name", "unknown"),
+                "file_path": chunk.get("file_path", ""),
                 "chunk_index": chunk.get("chunk_index", 0),
                 "char_count": chunk.get("char_count", len(chunk.get("text", ""))),
+                "document_id": chunk.get("document_id", ""),
+                "category": chunk.get("category", "other"),
+                "subject": chunk.get("subject", "general"),
+                "document_type": chunk.get("document_type", "other"),
             }
 
             tokens = tokenize(clean_chunk["text"])
@@ -138,28 +143,25 @@ class SparseRetriever:
         else:
             self.avg_doc_length = 0.0
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        category: Optional[str] = None,
+        subject: Optional[str] = None,
+        document_type: Optional[str] = None,
+        document_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Executes BM25 search over indexed document chunks.
+        Executes BM25 search over indexed document chunks with optional metadata filtering.
 
         Args:
             query: Natural language query string (must be non-empty)
             top_k: Number of highest scoring results to return (must be > 0)
-
-        Returns:
-            List of dictionaries sorted by descending sparse_score:
-            [
-                {
-                    "sparse_score": float,
-                    "chunk_id": str,
-                    "text": str,
-                    "page_number": int,
-                    "total_pages": int,
-                    "file_name": str,
-                    "chunk_index": int,
-                    "char_count": int,
-                }, ...
-            ]
+            category: Optional category filter (e.g. 'academic', 'career')
+            subject: Optional subject filter (e.g. 'database', 'computer_networks')
+            document_type: Optional document type filter (e.g. 'notes', 'resume')
+            document_id: Optional exact document ID filter
         """
         if not query or not query.strip():
             raise ValueError("Query string cannot be empty or whitespace only")
@@ -174,6 +176,12 @@ class SparseRetriever:
         if not query_tokens:
             return []
 
+        # Normalize filter criteria
+        cat_filter = category.strip().lower() if category else None
+        subj_filter = subject.strip().lower().replace(" ", "_") if subject else None
+        dtype_filter = document_type.strip().lower() if document_type else None
+        doc_id_filter = document_id.strip() if document_id else None
+
         scores: Dict[str, float] = {}
 
         # Precompute IDF for each unique query token
@@ -186,6 +194,18 @@ class SparseRetriever:
             idfs[token] = max(0.0, idf)
 
         for chunk_id, term_freqs in self.doc_term_freqs.items():
+            doc_meta = self.documents[chunk_id]
+
+            # Apply metadata filters
+            if cat_filter and doc_meta.get("category", "other").lower() != cat_filter:
+                continue
+            if subj_filter and doc_meta.get("subject", "general").lower() != subj_filter:
+                continue
+            if dtype_filter and doc_meta.get("document_type", "other").lower() != dtype_filter:
+                continue
+            if doc_id_filter and doc_meta.get("document_id") != doc_id_filter:
+                continue
+
             doc_len = self.doc_lengths.get(chunk_id, 0)
             score = 0.0
 
@@ -214,8 +234,13 @@ class SparseRetriever:
                 "page_number": doc_meta["page_number"],
                 "total_pages": doc_meta["total_pages"],
                 "file_name": doc_meta["file_name"],
+                "file_path": doc_meta.get("file_path", ""),
                 "chunk_index": doc_meta["chunk_index"],
                 "char_count": doc_meta["char_count"],
+                "document_id": doc_meta.get("document_id", ""),
+                "category": doc_meta.get("category", "other"),
+                "subject": doc_meta.get("subject", "general"),
+                "document_type": doc_meta.get("document_type", "other"),
             })
 
         return results

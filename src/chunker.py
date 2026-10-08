@@ -66,18 +66,23 @@ def create_chunks(
         file_path = page_doc.get("file_path", "")
 
         # Case A: Page text fits entirely within one chunk
+        chunk_dict = {
+            "chunk_id": f"{file_name}_p{page_num}_c0",
+            "text": text,
+            "page_number": page_num,
+            "total_pages": total_pages,
+            "file_name": file_name,
+            "file_path": file_path,
+            "chunk_index": 0,
+            "char_count": text_len,
+            "document_id": page_doc.get("document_id", ""),
+            "category": page_doc.get("category", "other"),
+            "subject": page_doc.get("subject", "general"),
+            "document_type": page_doc.get("document_type", "other"),
+        }
+
         if text_len <= chunk_size:
-            chunk_id = f"{file_name}_p{page_num}_c0"
-            all_chunks.append({
-                "chunk_id": chunk_id,
-                "text": text,
-                "page_number": page_num,
-                "total_pages": total_pages,
-                "file_name": file_name,
-                "file_path": file_path,
-                "chunk_index": 0,
-                "char_count": text_len,
-            })
+            all_chunks.append(chunk_dict)
             continue
 
         # Case B: Page text exceeds chunk_size -> apply sliding window
@@ -98,6 +103,10 @@ def create_chunks(
                 "file_path": file_path,
                 "chunk_index": chunk_idx,
                 "char_count": len(chunk_text),
+                "document_id": page_doc.get("document_id", ""),
+                "category": page_doc.get("category", "other"),
+                "subject": page_doc.get("subject", "general"),
+                "document_type": page_doc.get("document_type", "other"),
             })
 
             chunk_idx += 1

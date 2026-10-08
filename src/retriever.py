@@ -17,6 +17,7 @@ from src.embedder import embed_query
 from src.vector_store import initialize_vector_store
 from src.reranker import rerank as rerank_fn
 from google import genai
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 
 def search(
@@ -28,10 +29,15 @@ def search(
     rerank: bool = False,
     initial_candidates: Optional[int] = None,
     genai_client: Optional[genai.Client] = None,
+    category: Optional[str] = None,
+    subject: Optional[str] = None,
+    document_type: Optional[str] = None,
+    document_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Executes semantic vector search for a natural language user query.
-    Optionally reranks candidates using cross-evaluation relevance scoring.
+    Optionally filters by document metadata (category, subject, document_type, document_id)
+    and optionally reranks candidates using cross-evaluation relevance scoring.
 
     Args:
         query: User question or natural language query (must be non-empty)
@@ -42,6 +48,11 @@ def search(
         rerank: If True, retrieves top candidates from Qdrant and applies second-stage reranking
         initial_candidates: Number of candidate chunks to fetch before reranking (defaults to max(10, top_k * 2))
         genai_client: Optional pre-authenticated GenAI client for reranking
+        category: Optional category filter (e.g. 'academic', 'career')
+        subject: Optional subject filter (e.g. 'database', 'computer_networks')
+        document_type: Optional document type filter (e.g. 'notes', 'resume')
+        document_id: Optional exact document ID filter
+
 
     Returns:
         List of dictionaries ranked by descending similarity (or rerank_score if rerank=True):
@@ -105,11 +116,25 @@ def search(
     else:
         fetch_limit = top_k
 
-    # 6. Query Qdrant for Nearest Neighbors
+    # 6. Build Structured Qdrant Filter for Metadata
+    conditions = []
+    if category:
+        conditions.append(FieldCondition(key="category", match=MatchValue(value=category.strip().lower())))
+    if subject:
+        conditions.append(FieldCondition(key="subject", match=MatchValue(value=subject.strip().lower().replace(" ", "_"))))
+    if document_type:
+        conditions.append(FieldCondition(key="document_type", match=MatchValue(value=document_type.strip().lower())))
+    if document_id:
+        conditions.append(FieldCondition(key="document_id", match=MatchValue(value=document_id.strip())))
+
+    query_filter = Filter(must=conditions) if conditions else None
+
+    # 7. Query Qdrant for Nearest Neighbors
     try:
         search_result = active_client.query_points(
             collection_name=target_collection,
             query=q_vec,
+            query_filter=query_filter,
             limit=fetch_limit,
             with_payload=True,
             with_vectors=False,  # Exclude heavy raw vectors from results
@@ -117,7 +142,7 @@ def search(
     except Exception as e:
         raise RuntimeError(f"Qdrant query execution failed: {e}") from e
 
-    # 7. Format Candidate Results with Metadata
+    # 8. Format Candidate Results with Metadata
     results: List[Dict[str, Any]] = []
     for point in search_result.points:
         payload = point.payload or {}
@@ -129,11 +154,16 @@ def search(
             "page_number": payload.get("page_number", 0),
             "total_pages": payload.get("total_pages", 0),
             "file_name": payload.get("file_name", "unknown"),
+            "file_path": payload.get("file_path", ""),
             "chunk_index": payload.get("chunk_index", 0),
             "char_count": payload.get("char_count", len(text)),
+            "document_id": payload.get("document_id", ""),
+            "category": payload.get("category", "other"),
+            "subject": payload.get("subject", "general"),
+            "document_type": payload.get("document_type", "other"),
         })
 
-    # 8. Apply Reranking if enabled
+    # 9. Apply Reranking if enabled
     if rerank:
         return rerank_fn(
             query=query.strip(),

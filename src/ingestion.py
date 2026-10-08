@@ -28,6 +28,7 @@ from src.vector_store import (
     count_vectors,
 )
 from src.sparse_retriever import get_sparse_retriever
+from src.metadata import create_document_metadata, DocumentMetadata
 
 
 
@@ -38,10 +39,13 @@ def ingest_document(
     collection_name: Optional[str] = None,
     chunk_size: Optional[int] = None,
     overlap: Optional[int] = None,
+    category: Optional[str] = None,
+    subject: Optional[str] = None,
+    document_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ingests a single PDF document into the Qdrant vector store.
-    Pipeline: extract -> chunk -> embed -> upsert.
+    Pipeline: extract -> attach metadata -> chunk -> embed -> upsert.
 
     Args:
         file_path: Path to the target PDF file.
@@ -50,12 +54,19 @@ def ingest_document(
         collection_name: Optional target collection override.
         chunk_size: Optional character chunk size override.
         overlap: Optional character overlap override.
+        category: Optional document category (e.g., 'academic', 'career', 'dsa').
+        subject: Optional document subject (e.g., 'computer_networks', 'database').
+        document_type: Optional document type (e.g., 'notes', 'resume', 'textbook').
 
     Returns:
         Structured statistics dictionary:
         {
             "file_name": str,
             "file_path": str,
+            "document_id": str,
+            "category": str,
+            "subject": str,
+            "document_type": str,
             "pages": int,
             "pages_with_text": int,
             "chunks": int,
@@ -81,9 +92,24 @@ def ingest_document(
     c_overlap = overlap or settings.chunk_overlap
     target_coll = collection_name or settings.qdrant_collection_name
 
-    # 1. Page Extraction
+    # 1. Page Extraction & Metadata Setup
+    doc_meta = create_document_metadata(
+        file_name=path.name,
+        file_path=str(path),
+        category=category,
+        subject=subject,
+        document_type=document_type,
+    )
+
     pages = extract_pdf(path, include_empty=True)
     pages_with_text = sum(1 for p in pages if p["has_text"])
+
+    # Attach document metadata to each page so chunker propagates it
+    for p in pages:
+        p["document_id"] = doc_meta.document_id
+        p["category"] = doc_meta.category
+        p["subject"] = doc_meta.subject
+        p["document_type"] = doc_meta.document_type
 
     # 2. Chunking
     chunks = create_chunks(pages, chunk_size=c_size, overlap=c_overlap)
@@ -111,10 +137,13 @@ def ingest_document(
     sparse_retriever = get_sparse_retriever()
     sparse_retriever.index_chunks(chunks, auto_save=True)
 
-
     return {
         "file_name": path.name,
         "file_path": str(path),
+        "document_id": doc_meta.document_id,
+        "category": doc_meta.category,
+        "subject": doc_meta.subject,
+        "document_type": doc_meta.document_type,
         "pages": len(pages),
         "pages_with_text": pages_with_text,
         "chunks": len(chunks),
@@ -131,6 +160,9 @@ def ingest_directory(
     collection_name: Optional[str] = None,
     chunk_size: Optional[int] = None,
     overlap: Optional[int] = None,
+    category: Optional[str] = None,
+    subject: Optional[str] = None,
+    document_type: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Scans a directory for all PDF documents and indexes them independently
@@ -193,6 +225,9 @@ def ingest_directory(
                     collection_name=collection_name,
                     chunk_size=chunk_size,
                     overlap=overlap,
+                    category=category,
+                    subject=subject,
+                    document_type=document_type,
                 )
                 successful_details.append(stats)
                 total_pages += stats["pages"]

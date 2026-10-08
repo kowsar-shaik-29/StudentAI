@@ -182,11 +182,21 @@ def cmd_chunk(pdf_path: str, chunk_size: int = 1000, overlap: int = 200, preview
     print("Chunking completed successfully.")
 
 
-def cmd_ingest_single(pdf_path: str) -> None:
-    """Ingests a single PDF document into Qdrant."""
+def cmd_ingest_single(
+    pdf_path: str,
+    category: str = None,
+    subject: str = None,
+    document_type: str = None,
+) -> None:
+    """Ingests a single PDF document into Qdrant with optional metadata."""
     require_api_key()
     try:
-        stats = ingest_document(pdf_path)
+        stats = ingest_document(
+            pdf_path,
+            category=category,
+            subject=subject,
+            document_type=document_type,
+        )
     except Exception as err:
         print(f"Ingestion Error: {err}")
         sys.exit(1)
@@ -195,11 +205,16 @@ def cmd_ingest_single(pdf_path: str) -> None:
     print("DOCUMENT INGESTION")
     print("=" * 60)
     print(f"\nDocument:\n{stats['file_name']}\n")
+    print(f"Document ID:\n{stats.get('document_id', 'N/A')}\n")
+    print(f"Category:\n{stats.get('category', 'other')}\n")
+    print(f"Subject:\n{stats.get('subject', 'general')}\n")
+    print(f"Type:\n{stats.get('document_type', 'other')}\n")
     print(f"Pages:\n{stats['pages']} ({stats['pages_with_text']} with text)\n")
     print(f"Chunks:\n{stats['chunks']}\n")
     print(f"Embeddings:\n{stats['embeddings']}\n")
     print(f"Vectors stored:\n{stats['vectors_stored']}\n")
     print("=" * 60)
+
 
 
 def cmd_ingest_dir(directory_path: str) -> None:
@@ -243,8 +258,11 @@ def cmd_search(
     initial_candidates: int = 10,
     hybrid: bool = False,
     sparse_only: bool = False,
+    category: str = None,
+    subject: str = None,
+    document_type: str = None,
 ) -> None:
-    """Executes search (dense, sparse, or hybrid) with optional reranking."""
+    """Executes search (dense, sparse, or hybrid) with optional reranking and metadata filters."""
     clean_query = query.strip()
 
     print("=" * 60)
@@ -256,6 +274,8 @@ def cmd_search(
         print("SEMANTIC SEARCH (Dense Vector)")
     print("=" * 60)
     print(f"\nQuery:\n{clean_query}\n")
+    if category or subject or document_type:
+        print(f"Filter -> Category: {category or 'ANY'} | Subject: {subject or 'ANY'} | Type: {document_type or 'ANY'}\n")
 
     if hybrid:
         require_api_key()
@@ -267,12 +287,21 @@ def cmd_search(
                 client=q_client,
                 dense_candidates=initial_candidates,
                 sparse_candidates=initial_candidates,
+                category=category,
+                subject=subject,
+                document_type=document_type,
             )
         finally:
             q_client.close()
     elif sparse_only:
         sr = get_sparse_retriever()
-        results = sr.search(query=clean_query, top_k=top_k)
+        results = sr.search(
+            query=clean_query,
+            top_k=top_k,
+            category=category,
+            subject=subject,
+            document_type=document_type,
+        )
     else:
         require_api_key()
         if rerank:
@@ -287,6 +316,9 @@ def cmd_search(
                 client=q_client,
                 rerank=rerank,
                 initial_candidates=initial_candidates,
+                category=category,
+                subject=subject,
+                document_type=document_type,
             )
         finally:
             q_client.close()
@@ -298,6 +330,9 @@ def cmd_search(
         doc = res["file_name"]
         page = res["page_number"]
         chunk_id = res["chunk_id"]
+        res_cat = res.get("category", "other")
+        res_subj = res.get("subject", "general")
+        res_type = res.get("document_type", "other")
         raw_text = res["text"].strip().replace("\r", "")
 
         preview_text = raw_text[:preview_chars]
@@ -310,14 +345,14 @@ def cmd_search(
             print(f"Fused score (RRF): {res.get('fused_score', 0.0):.6f}")
             print(f"Dense score:       {res.get('dense_score', 0.0):.4f}")
             print(f"Sparse score:      {res.get('sparse_score', 0.0):.4f}")
-            print(f"Document:          {doc}")
+            print(f"Document:          {doc} [{res_cat}/{res_subj}/{res_type}]")
             print(f"Page:              {page}")
             print(f"Chunk:             {chunk_id}")
             print("Text:")
             print(preview_text)
         elif sparse_only:
             print(f"Sparse score (BM25): {res.get('sparse_score', 0.0):.4f}")
-            print(f"Document:            {doc}")
+            print(f"Document:            {doc} [{res_cat}/{res_subj}/{res_type}]")
             print(f"Page:                {page}")
             print(f"Chunk:               {chunk_id}")
             print("Text:")
@@ -326,14 +361,14 @@ def cmd_search(
             print(f"Qdrant score:\n{res.get('score', 0.0):.4f}\n")
             rerank_score = res.get("rerank_score", res.get("score", 0.0))
             print(f"Reranker score:\n{rerank_score:.4f}\n")
-            print(f"Document:\n{doc}\n")
+            print(f"Document:\n{doc} [{res_cat}/{res_subj}/{res_type}]\n")
             print(f"Page:\n{page}\n")
             print(f"Chunk:\n{chunk_id}\n")
             print("Text:")
             print(preview_text)
         else:
             print(f"Score:    {res.get('score', 0.0):.4f}")
-            print(f"Document: {doc}")
+            print(f"Document: {doc} [{res_cat}/{res_subj}/{res_type}]")
             print(f"Page:     {page}")
             print(f"Chunk ID: {chunk_id}")
             print("Text:")
@@ -349,14 +384,19 @@ def cmd_ask(
     rerank: bool = False,
     initial_candidates: int = 10,
     hybrid: bool = False,
+    category: str = None,
+    subject: str = None,
+    document_type: str = None,
 ) -> None:
-    """Executes end-to-end RAG question answering with optional reranking or hybrid retrieval."""
+    """Executes end-to-end RAG question answering with optional reranking or hybrid retrieval and metadata filters."""
     require_api_key()
 
     print("=" * 60)
     print("STUDENTAI RAG")
     print("=" * 60)
     print(f"\nQuestion:\n{question.strip()}\n")
+    if category or subject or document_type:
+        print(f"Filter -> Category: {category or 'ANY'} | Subject: {subject or 'ANY'} | Type: {document_type or 'ANY'}\n")
     if hybrid:
         print("Retrieval Mode: Hybrid (Dense + Sparse BM25 RRF)\n")
     elif rerank:
@@ -368,6 +408,9 @@ def cmd_ask(
         rerank=rerank,
         initial_candidates=initial_candidates,
         hybrid=hybrid,
+        category=category,
+        subject=subject,
+        document_type=document_type,
     )
 
     print("-" * 60)
@@ -540,19 +583,28 @@ def main():
     chunk_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in characters")
     chunk_parser.add_argument("--overlap", type=int, default=200, help="Chunk overlap in characters")
 
-    # Ingest / Index command (Step 8)
-    ingest_parser = subparsers.add_parser("ingest", help="Ingest a single PDF into Qdrant")
+    # Ingest / Index command (Step 8 & 12)
+    ingest_parser = subparsers.add_parser("ingest", help="Ingest a single PDF into Qdrant with metadata")
     ingest_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+    ingest_parser.add_argument("--category", type=str, default=None, help="Document category (e.g. academic, career, dsa)")
+    ingest_parser.add_argument("--subject", type=str, default=None, help="Document subject (e.g. computer_networks, database)")
+    ingest_parser.add_argument("--type", type=str, default=None, help="Document type (e.g. notes, resume, textbook)")
 
     # Index command (alias for ingest)
     index_parser = subparsers.add_parser("index", help="Alias for ingest")
     index_parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
+    index_parser.add_argument("--category", type=str, default=None, help="Document category (e.g. academic, career, dsa)")
+    index_parser.add_argument("--subject", type=str, default=None, help="Document subject (e.g. computer_networks, database)")
+    index_parser.add_argument("--type", type=str, default=None, help="Document type (e.g. notes, resume, textbook)")
 
-    # Ingest-dir command (Step 8)
+    # Ingest-dir command (Step 8 & 12)
     ingest_dir_parser = subparsers.add_parser("ingest-dir", help="Ingest all PDFs in a directory into Qdrant")
     ingest_dir_parser.add_argument("directory_path", type=str, help="Path to the directory containing PDFs")
+    ingest_dir_parser.add_argument("--category", type=str, default=None, help="Default category for directory documents")
+    ingest_dir_parser.add_argument("--subject", type=str, default=None, help="Default subject for directory documents")
+    ingest_dir_parser.add_argument("--type", type=str, default=None, help="Default type for directory documents")
 
-    # Search command (Step 6, Step 9, Step 10)
+    # Search command (Step 6, Step 9, Step 10, Step 12)
     search_parser = subparsers.add_parser("search", help="Execute semantic, sparse, or hybrid retrieval")
     search_parser.add_argument("query", type=str, help="Search query string")
     search_parser.add_argument("--top-k", type=int, default=5, help="Number of results to retrieve")
@@ -560,14 +612,20 @@ def main():
     search_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates for reranking/hybrid")
     search_parser.add_argument("--hybrid", action="store_true", help="Enable Hybrid retrieval (Dense + Sparse BM25 RRF)")
     search_parser.add_argument("--sparse", action="store_true", help="Run BM25 sparse retrieval only")
+    search_parser.add_argument("--category", type=str, default=None, help="Filter by document category")
+    search_parser.add_argument("--subject", type=str, default=None, help="Filter by document subject")
+    search_parser.add_argument("--type", type=str, default=None, help="Filter by document type")
 
-    # Ask command (Step 7, Step 9, Step 10)
+    # Ask command (Step 7, Step 9, Step 10, Step 12)
     ask_parser = subparsers.add_parser("ask", help="Ask a question and generate a grounded, cited RAG answer")
     ask_parser.add_argument("question", type=str, help="Question to answer")
     ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
     ask_parser.add_argument("--rerank", action="store_true", help="Enable second-stage relevance reranking")
     ask_parser.add_argument("--candidates", type=int, default=10, help="Number of initial candidates")
     ask_parser.add_argument("--hybrid", action="store_true", help="Enable Hybrid retrieval (Dense + Sparse BM25 RRF)")
+    ask_parser.add_argument("--category", type=str, default=None, help="Filter context by document category")
+    ask_parser.add_argument("--subject", type=str, default=None, help="Filter context by document subject")
+    ask_parser.add_argument("--type", type=str, default=None, help="Filter context by document type")
 
     # Evaluate command (Step 11)
     eval_parser = subparsers.add_parser("evaluate", help="Run full RAG benchmark evaluation")
@@ -584,7 +642,12 @@ def main():
     elif args.command == "chunk":
         cmd_chunk(args.pdf_path, chunk_size=args.chunk_size, overlap=args.overlap)
     elif args.command in ("ingest", "index"):
-        cmd_ingest_single(args.pdf_path)
+        cmd_ingest_single(
+            args.pdf_path,
+            category=args.category,
+            subject=args.subject,
+            document_type=args.type,
+        )
     elif args.command == "ingest-dir":
         cmd_ingest_dir(args.directory_path)
     elif args.command == "search":
@@ -595,6 +658,9 @@ def main():
             initial_candidates=args.candidates,
             hybrid=args.hybrid,
             sparse_only=args.sparse,
+            category=args.category,
+            subject=args.subject,
+            document_type=args.type,
         )
     elif args.command == "ask":
         cmd_ask(
@@ -603,6 +669,9 @@ def main():
             rerank=args.rerank,
             initial_candidates=args.candidates,
             hybrid=args.hybrid,
+            category=args.category,
+            subject=args.subject,
+            document_type=args.type,
         )
     elif args.command == "evaluate":
         cmd_evaluate(
@@ -612,6 +681,7 @@ def main():
         )
     else:
         parser.print_help()
+
 
 
 if __name__ == "__main__":

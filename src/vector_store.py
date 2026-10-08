@@ -217,6 +217,10 @@ def upsert_chunks(
             "file_path": chunk["file_path"],
             "chunk_index": chunk["chunk_index"],
             "char_count": chunk["char_count"],
+            "document_id": chunk.get("document_id", ""),
+            "category": chunk.get("category", "other"),
+            "subject": chunk.get("subject", "general"),
+            "document_type": chunk.get("document_type", "other"),
         }
 
         points.append(PointStruct(id=point_id, vector=emb, payload=payload))

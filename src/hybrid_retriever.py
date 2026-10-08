@@ -82,6 +82,10 @@ def reciprocal_rank_fusion(
             "file_name": meta["file_name"],
             "chunk_index": meta["chunk_index"],
             "char_count": meta["char_count"],
+            "document_id": meta.get("document_id"),
+            "category": meta.get("category", "other"),
+            "subject": meta.get("subject", "general"),
+            "document_type": meta.get("document_type", "other"),
             "dense_score": float(dense_scores.get(cid, 0.0)),
             "sparse_score": float(sparse_scores.get(cid, 0.0)),
             "fused_score": float(fused_scores[cid]),
@@ -103,6 +107,10 @@ def hybrid_search(
     sparse_retriever: Optional[SparseRetriever] = None,
     collection_name: Optional[str] = None,
     query_vector: Optional[List[float]] = None,
+    category: Optional[str] = None,
+    subject: Optional[str] = None,
+    document_type: Optional[str] = None,
+    document_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Executes hybrid search combining dense semantic retrieval and sparse BM25 retrieval.
@@ -117,6 +125,10 @@ def hybrid_search(
         sparse_retriever: Optional SparseRetriever instance.
         collection_name: Optional Qdrant collection override.
         query_vector: Optional pre-computed query vector (useful for testing/mocking).
+        category: Optional metadata category filter.
+        subject: Optional metadata subject filter.
+        document_type: Optional metadata document_type filter.
+        document_id: Optional metadata document_id filter.
 
     Returns:
         List of dictionaries ranked by descending fused_score:
@@ -129,6 +141,10 @@ def hybrid_search(
                 "file_name": str,
                 "chunk_index": int,
                 "char_count": int,
+                "document_id": Optional[str],
+                "category": str,
+                "subject": str,
+                "document_type": str,
                 "dense_score": float,
                 "sparse_score": float,
                 "fused_score": float,
@@ -158,6 +174,10 @@ def hybrid_search(
         collection_name=collection_name,
         query_vector=query_vector,
         rerank=False,
+        category=category,
+        subject=subject,
+        document_type=document_type,
+        document_id=document_id,
     )
 
     # 2. Sparse Lexical Retrieval
@@ -165,6 +185,10 @@ def hybrid_search(
     sparse_results = sr.search(
         query=clean_query,
         top_k=sparse_candidates,
+        category=category,
+        subject=subject,
+        document_type=document_type,
+        document_id=document_id,
     )
 
     # 3. Reciprocal Rank Fusion
@@ -174,3 +198,4 @@ def hybrid_search(
         top_k=top_k,
         rrf_k=rrf_k,
     )
+
