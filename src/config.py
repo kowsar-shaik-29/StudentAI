@@ -43,6 +43,10 @@ class Settings:
     # Sparse Index Configuration
     sparse_index_dir: Path = BASE_DIR / os.getenv("SPARSE_INDEX_DIR", "data/sparse_index")
 
+    # API Configuration
+    app_version: str = "1.0.0"
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+
 
 
 def get_settings() -> Settings:

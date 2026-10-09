@@ -288,3 +288,36 @@ Step 21 introduces a controlled, deterministic orchestration layer that understa
   - Integrated citation verification via erify_citations().
 - **CLI Command**:
   - python -m src.main agent --query <goal>: Execute multi-step agentic orchestration from the command line.
+
+---
+
+## Step 22: FastAPI Backend Service
+
+Step 22 exposes StudentAI capabilities as clean, reliable, and testable REST APIs for frontend integration (e.g. Next.js):
+- **Service Endpoints (src/api.py)**:
+  - GET /health: Health status and application version without exposing secrets or paths.
+  - POST /api/agent/run: Multi-step and single-step agentic orchestration (un_agent()).
+  - POST /api/learning/ask: Academic question answering with intent routing and page citations.
+  - GET /api/learning/profile: Student learning analytics profile (weak/strong topics).
+  - GET /api/learning/recommendations: Actionable personalized study recommendations.
+  - POST /api/study-plans: Structured multi-day academic schedule generator (create_study_plan()).
+  - POST /api/career/ask: Career and resume question answering with grounded citations.
+  - POST /api/career/job-fit: Deterministic skill extraction and job requirement gap matching.
+  - GET /api/projects: List of all indexed software projects.
+  - POST /api/projects/ask: Technical QA grounded in software project documentation.
+  - POST /api/documents/upload: Safe ingestion for .pdf, .md, and .txt files (bounds size to 10MB, verifies extensions, prevents path traversal).
+- **Architecture & Reliability**:
+  - Pure synchronous AI modules are offloaded to a threadpool via un_in_threadpool, preventing event loop blocking.
+  - Structured request and response validation using Pydantic schemas.
+  - Configurable CORS middleware via CORS_ORIGINS environment variable (defaults to http://localhost:3000,http://127.0.0.1:3000).
+  - Never leaks API keys, passwords, or raw filesystem paths to API clients.
+- **Starting the API Server**:
+  `ash
+  # Local development server with auto-reload
+  uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+  `
+- **Interactive Documentation**:
+  - OpenAPI UI: http://localhost:8000/docs
+  - ReDoc: http://localhost:8000/redoc
+- **Authentication & Multi-User Disclaimer**:
+  - This API is designed for local single-user prototyping. In multi-user production deployments, an authentication and authorization layer (e.g. JWT / OAuth2) must be integrated before exposing private documents or shared persistent records.

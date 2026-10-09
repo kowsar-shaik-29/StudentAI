@@ -3,3 +3,7 @@ google-genai==2.29.0
 qdrant-client==1.19.1
 pymupdf==1.28.2
 python-dotenv==1.2.4
+fastapi==0.143.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+httpx==0.28.1
