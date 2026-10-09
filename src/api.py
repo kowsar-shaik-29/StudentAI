@@ -305,8 +305,8 @@ async def register_endpoint(req: UserRegisterRequest, response: Response):
             key=SESSION_COOKIE_NAME,
             value=token,
             httponly=True,
-            samesite="lax",
-            secure=False,  # Set to True in production HTTPS
+            samesite=settings.cookie_samesite,
+            secure=settings.cookie_secure,
             max_age=settings.auth_token_expire_hours * 3600,
             path="/",
         )
@@ -656,9 +656,9 @@ async def upload_document_endpoint(
             detail="Uploaded file is empty.",
         )
 
-    temp_dir = Path(tempfile.gettempdir()) / "studentai_uploads"
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    temp_file_path = temp_dir / filename
+    upload_dir = settings.uploads_dir
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    temp_file_path = upload_dir / filename
 
     try:
         with open(temp_file_path, "wb") as f:

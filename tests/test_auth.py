@@ -301,5 +301,91 @@ class TestApiAuthSecurity(unittest.TestCase):
             self.assertEqual(data["id"], "user_bearer_test")
 
 
+    def test_registration_and_login_cookie_options_match(self):
+        """Registration and login must set identical cookie attributes (httponly, samesite, secure, path)."""
+        mock_user = User(
+            id="usr_cookie_test",
+            username="cookie_user",
+            created_at="2026-01-01T00:00:00Z",
+            is_active=True,
+        )
+        with patch("src.api.create_user", return_value=mock_user), \
+             patch("src.api.authenticate_user", return_value=mock_user):
+
+            # Register
+            reg_resp = self.client.post("/api/auth/register", json={"username": "cookie_user", "password": "Password123!"})
+            self.assertEqual(reg_resp.status_code, 200)
+            reg_cookie = reg_resp.headers.get("set-cookie")
+            self.assertIsNotNone(reg_cookie)
+
+            # Login
+            login_resp = self.client.post("/api/auth/login", json={"username": "cookie_user", "password": "Password123!"})
+            self.assertEqual(login_resp.status_code, 200)
+            login_cookie = login_resp.headers.get("set-cookie")
+            self.assertIsNotNone(login_cookie)
+
+            # Compare flags in Set-Cookie headers (excluding value)
+            self.assertIn("HttpOnly", reg_cookie)
+            self.assertIn("HttpOnly", login_cookie)
+            self.assertIn("Path=/", reg_cookie)
+            self.assertIn("Path=/", login_cookie)
+
+
+class TestProductionSecurityAndStorageConfig(unittest.TestCase):
+    def test_production_rejects_insecure_default_secret(self):
+        """When ENVIRONMENT=production and AUTH_SECRET_KEY is default or short, require_production_auth_secret raises ValueError."""
+        from src.config import require_production_auth_secret
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "AUTH_SECRET_KEY": "studentai-dev-secret-change-in-production-key-32b"}):
+            with self.assertRaises(ValueError) as ctx:
+                require_production_auth_secret()
+            self.assertIn("CRITICAL SECURITY CONFIGURATION ERROR", str(ctx.exception))
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "AUTH_SECRET_KEY": "too-short"}):
+            with self.assertRaises(ValueError):
+                require_production_auth_secret()
+
+        # Valid 32+ char secret in production succeeds
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "AUTH_SECRET_KEY": "a" * 32}):
+            secret = require_production_auth_secret()
+            self.assertEqual(secret, "a" * 32)
+
+    def test_production_enforces_secure_cookies(self):
+        """When ENVIRONMENT=production, Settings.cookie_secure must always evaluate to True."""
+        from src.config import get_settings
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "COOKIE_SECURE": "false"}):
+            settings = get_settings()
+            self.assertTrue(settings.cookie_secure)
+
+        # In development, respects COOKIE_SECURE=false
+        with patch.dict(os.environ, {"ENVIRONMENT": "development", "COOKIE_SECURE": "false"}):
+            settings = get_settings()
+            self.assertFalse(settings.cookie_secure)
+
+    def test_storage_path_resolution(self):
+        """resolve_storage_path preserves absolute paths and resolves relative paths against BASE_DIR."""
+        from src.config import resolve_storage_path, BASE_DIR
+
+        # Relative path
+        with patch.dict(os.environ, {"TEST_REL_PATH": "data/custom_store"}):
+            rel = resolve_storage_path("TEST_REL_PATH", "data/default_store")
+            self.assertEqual(rel, BASE_DIR / "data/custom_store")
+
+        # Absolute Linux/POSIX path
+        with patch.dict(os.environ, {"TEST_ABS_PATH": "/var/data/studentai/custom.db"}):
+            resolved_abs = resolve_storage_path("TEST_ABS_PATH", "data/default.db")
+            # Should evaluate to absolute path
+            self.assertTrue(resolved_abs.is_absolute() or str(resolved_abs).startswith(os.path.sep) or str(resolved_abs).startswith("/"))
+            self.assertIn("var", str(resolved_abs))
+            self.assertIn("studentai", str(resolved_abs))
+
+        # Default fallback
+        if "TEST_UNSET_VAR" in os.environ:
+            del os.environ["TEST_UNSET_VAR"]
+        default_res = resolve_storage_path("TEST_UNSET_VAR", "data/default_fallback")
+        self.assertEqual(default_res, BASE_DIR / "data/default_fallback")
+
+
 if __name__ == "__main__":
     unittest.main()

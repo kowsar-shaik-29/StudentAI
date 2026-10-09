@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union
 from datetime import datetime, timezone
 
-from src.config import get_settings
+from src.config import get_settings, require_production_auth_secret
 
 PBKDF2_ITERATIONS = 600000
 SALT_SIZE = 16
@@ -200,6 +200,7 @@ def create_access_token(
     secret_key: Optional[str] = None,
 ) -> str:
     """Creates a signed HMAC-SHA256 session token."""
+    require_production_auth_secret()
     settings = get_settings()
     secret = secret_key or settings.auth_secret_key
     exp_seconds = expires_delta_seconds or (settings.auth_token_expire_hours * 3600)
@@ -231,6 +232,7 @@ def verify_access_token(
     if len(parts) != 3:
         return None
 
+    require_production_auth_secret()
     h_b64, p_b64, s_b64 = parts
     settings = get_settings()
     secret = secret_key or settings.auth_secret_key
