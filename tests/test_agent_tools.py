@@ -38,6 +38,20 @@ class TestAgentTools(unittest.TestCase):
         self.assertFalse(res["success"])
         self.assertIn("Invalid intent", res["error"])
 
+    @patch("src.agent_tools.answer_learning_question")
+    def test_parameter_validation_normalizes_intent_aliases(self, mock_learn):
+        mock_learn.return_value = {
+            "intent": "EXPLAIN",
+            "topic": "Algorithms",
+            "subtopic": "BFS",
+            "answer": "BFS traverses level by level. [Page 1]",
+            "sources": [{"file_name": "algo.pdf", "page_number": 1}],
+        }
+        res = execute_tool("learning_ask", {"query": "What is BFS?", "intent": "concept_explanation"})
+        self.assertTrue(res["success"])
+        mock_learn.assert_called_once()
+        self.assertEqual(mock_learn.call_args.kwargs["intent"], "EXPLAIN")
+
     def test_parameter_validation_rejects_invalid_days(self):
         res = execute_tool("create_study_plan", {"subject": "DBMS", "days": -1})
         self.assertFalse(res["success"])

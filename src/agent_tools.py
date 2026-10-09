@@ -57,9 +57,32 @@ def _tool_learning_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
     if not isinstance(top_k, int) or top_k <= 0 or top_k > 20:
         raise ToolExecutionError("Argument 'top_k' must be an integer between 1 and 20.")
 
-    intent = args.get("intent")
-    if intent is not None and intent not in ("EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING"):
-        raise ToolExecutionError(f"Invalid intent '{intent}'.")
+    raw_intent = args.get("intent")
+    intent = None
+    if raw_intent is not None and isinstance(raw_intent, str):
+        normalized = raw_intent.strip().upper()
+        # Common intent alias mapping
+        alias_map = {
+            "CONCEPT_EXPLANATION": "EXPLAIN",
+            "EXPLANATION": "EXPLAIN",
+            "CONCEPT": "EXPLAIN",
+            "SUMMARY": "SUMMARIZE",
+            "RECAP": "SUMMARIZE",
+            "COMPARISON": "COMPARE",
+            "CONTRAST": "COMPARE",
+            "PRACTICE": "QUIZ",
+            "ASSESSMENT": "QUIZ",
+            "EXAM": "EXAM_ANSWER",
+            "EXAM_PREP": "EXAM_ANSWER",
+            "GENERAL": "GENERAL_LEARNING",
+            "LEARNING": "GENERAL_LEARNING",
+        }
+        if normalized in ("EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING"):
+            intent = normalized
+        elif normalized in alias_map:
+            intent = alias_map[normalized]
+        else:
+            raise ToolExecutionError(f"Invalid intent '{raw_intent}'. Valid options: EXPLAIN, SUMMARIZE, COMPARE, QUIZ, EXAM_ANSWER, GENERAL_LEARNING.")
 
     # Enforce authenticated user_id from execution context
     auth_user_id = context.get("user_id") if context else None

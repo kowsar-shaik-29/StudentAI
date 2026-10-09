@@ -36,7 +36,7 @@ PLANNER_SYSTEM_INSTRUCTION = """You are the Lead Orchestrator for StudentAI, an 
 Your job is to analyze the user's goal and formulate a minimal, efficient execution plan using ONLY registered tools.
 
 REGISTERED TOOLS:
-- learning_ask: Query academic concepts with notes and citations. Args: {"query": str, "intent": optional str}
+- learning_ask: Query academic concepts with notes and citations. Args: {"query": str, "intent": optional str (one of "EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING")}
 - learning_profile: View student's learning history, weak topics, and unassessed areas. Args: {"user_id": str}
 - learning_recommendations: Fetch actionable next topics to study. Args: {"user_id": str, "topic": optional str, "limit": optional int}
 - revision_topics: View prioritized revision items based on weakness. Args: {"user_id": str, "subject": optional str, "limit": optional int}
