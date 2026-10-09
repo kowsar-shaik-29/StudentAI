@@ -63,6 +63,13 @@ from src.study_planner import (
 from src.revision_engine import (
     get_revision_recommendations,
 )
+from src.career_rag import (
+    answer_career_question,
+    get_career_document_text,
+    analyze_job_fit,
+)
+from src.skill_extractor import extract_skills
+from src.job_matcher import match_resume_to_job
 
 
 
@@ -851,6 +858,164 @@ def cmd_study_plans() -> None:
     print("=" * 70)
 
 
+def cmd_career_docs() -> None:
+    """Lists indexed career documents (resumes, job descriptions)."""
+    sr = get_sparse_retriever()
+    career_docs: Dict[str, Dict[str, Any]] = {}
+    for doc in sr.documents.values():
+        if doc.get("category") == "career" or doc.get("document_type") in ("resume", "job_description"):
+            d_id = doc.get("document_id") or doc.get("file_name")
+            if d_id not in career_docs:
+                career_docs[d_id] = {
+                    "document_id": d_id,
+                    "file_name": doc.get("file_name"),
+                    "document_type": doc.get("document_type"),
+                    "total_pages": doc.get("total_pages"),
+                    "category": doc.get("category"),
+                }
+
+    print("=" * 70)
+    print("INDEXED CAREER DOCUMENTS")
+    print("=" * 70)
+    if not career_docs:
+        print("\nNo career documents indexed yet.\nIngest resumes or job descriptions with:")
+        print("  python -m src.main ingest <path-to-pdf> --category career --type resume")
+        print("  python -m src.main ingest <path-to-pdf> --category career --type job_description\n")
+    else:
+        for idx, (d_id, d_info) in enumerate(career_docs.items(), start=1):
+            print(f"{idx}. File: {d_info['file_name']}")
+            print(f"   Document ID:   {d_info['document_id']}")
+            print(f"   Document Type: {d_info['document_type']}")
+            print(f"   Category:      {d_info['category']}")
+            print()
+    print("=" * 70)
+
+
+def cmd_career_ask(
+    query: str,
+    top_k: int = 5,
+    document_type: Optional[str] = None,
+    document_id: Optional[str] = None,
+) -> None:
+    """Answers questions strictly using career documents (resumes, job descriptions)."""
+    require_api_key()
+    print("=" * 70)
+    print("STUDENTAI CAREER RAG")
+    print("=" * 70)
+    print(f"Question:      {query}")
+    if document_type:
+        print(f"Document Type: {document_type}")
+    if document_id:
+        print(f"Document ID:   {document_id}")
+    print("-" * 70)
+
+    res = answer_career_question(
+        query=query,
+        top_k=top_k,
+        document_type=document_type,
+        document_id=document_id,
+    )
+
+    print("\nANSWER:")
+    print(res["answer"])
+    print("\n" + "-" * 70)
+    print(f"SOURCES ({len(res['sources'])} retrieved):")
+    if not res["sources"]:
+        print("None")
+    for idx, s in enumerate(res["sources"], start=1):
+        score_val = s.get("score", 0.0)
+        print(f"{idx}. [{s['file_name']}] Page {s['page_number']} (Score: {score_val:.4f}, Type: {s['document_type']})")
+    print("=" * 70)
+
+
+def cmd_career_skills(document_id: str) -> None:
+    """Extracts explicit skills from an indexed resume or job description."""
+    require_api_key()
+    sr = get_sparse_retriever()
+    try:
+        doc = get_career_document_text(document_id, sparse_retriever=sr)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    print("=" * 70)
+    print("CAREER SKILL EXTRACTION")
+    print("=" * 70)
+    print(f"File:          {doc['file_name']}")
+    print(f"Document ID:   {doc['document_id']}")
+    print(f"Document Type: {doc['document_type']}")
+    print("-" * 70)
+
+    extracted = extract_skills(text=doc["full_text"], document_type=doc["document_type"])
+    skills = extracted.get("skills", [])
+    print(f"\nExtracted Skills ({len(skills)} found):\n")
+
+    if not skills:
+        print("No explicitly mentioned skills detected in document text.")
+    else:
+        for idx, s in enumerate(skills, start=1):
+            print(f"{idx}. {s['name']} (Type: {s['skill_type']}, Confidence: {s['confidence']:.2f})")
+            if s.get("evidence_quote"):
+                print(f"   Evidence: \"{s['evidence_quote']}\"")
+    print("\n" + "=" * 70)
+
+
+def cmd_match_job(resume_id: str, job_id: str) -> None:
+    """Performs deterministic match between a resume and job description."""
+    require_api_key()
+    sr = get_sparse_retriever()
+    try:
+        fit = analyze_job_fit(resume_document_id=resume_id, job_document_id=job_id, sparse_retriever=sr)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    res_info = fit["resume"]
+    job_info = fit["job"]
+    m = fit["match"]
+
+    print("=" * 70)
+    print("DETERMINISTIC JOB FIT ANALYSIS")
+    print("=" * 70)
+    print(f"Resume:  {res_info['file_name']} (ID: {res_info['document_id']}) - {res_info['skill_count']} skills")
+    print(f"Job:     {job_info['file_name']} (ID: {job_info['document_id']}) - {job_info['requirement_count']} requirements")
+    print("-" * 70)
+    print(f"Coverage Score:     {m['coverage_percentage']:.1f}%")
+    print(f"Matched Skills:     {m['matched_count']} / {m['requirement_count']}")
+    print(f"Partial Matches:    {m['partial_count']}")
+    print(f"Missing Skills:     {m['missing_count']}")
+    print("-" * 70)
+
+    print("\nMATCHED SKILLS (Full / Exact Equivalent):")
+    if not m["matched_skills"]:
+        print("None")
+    for s in m["matched_skills"]:
+        print(f"- {s['requirement']} (Matched: '{s['matched_resume_skill']}', Type: {s['skill_type']})")
+        if s.get("resume_evidence"):
+            print(f"  Resume Quote: \"{s['resume_evidence']}\"")
+
+    if m["partial_matches"]:
+        print("\nPARTIAL / RELATED MENTIONS (NOT counted in coverage score):")
+        for p in m["partial_matches"]:
+            print(f"- {p['requirement']}: candidate mentions '{p['candidate_mention']}'")
+            if p.get("resume_evidence"):
+                print(f"  Resume Quote: \"{p['resume_evidence']}\"")
+
+    print("\nMISSING REQUIREMENTS:")
+    if not m["missing_skills"]:
+        print("None (All requirements matched)")
+    for s in m["missing_skills"]:
+        print(f"- {s['requirement']} (Type: {s['skill_type']})")
+        if s.get("job_evidence"):
+            print(f"  Job Quote: \"{s['job_evidence']}\"")
+
+    print("\n" + "-" * 70)
+    print("IMPORTANT DISCLAIMER & LIMITATIONS:")
+    for lim in m["limitations"]:
+        print(f"* {lim}")
+    print("=" * 70)
+
+
 def cmd_evaluate(
     eval_file: str = "data/evaluation/rag_eval.json",
     top_k: int = 5,
@@ -1101,6 +1266,25 @@ def main():
     eval_parser.add_argument("--top-k", type=int, default=5, help="Top-K for evaluation")
     eval_parser.add_argument("--skip-generation", action="store_true", help="Evaluate retrieval only")
 
+    # Career-docs command (Step 18: Career RAG)
+    subparsers.add_parser("career-docs", help="List indexed career documents (resumes, job descriptions)")
+
+    # Career-ask command (Step 18: Career RAG)
+    career_ask_parser = subparsers.add_parser("career-ask", help="Ask a question scoped strictly to career documents (resumes, job descriptions)")
+    career_ask_parser.add_argument("question", type=str, help="Career question or candidate query")
+    career_ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
+    career_ask_parser.add_argument("--type", type=str, default=None, choices=["resume", "job_description"], help="Filter by career document type")
+    career_ask_parser.add_argument("--document-id", type=str, default=None, help="Scope query strictly to a single document ID")
+
+    # Career-skills command (Step 18: Skill Extraction)
+    career_skills_parser = subparsers.add_parser("career-skills", help="Extract explicit skills from an indexed career document")
+    career_skills_parser.add_argument("--document-id", type=str, required=True, help="Document ID or filename of indexed resume or job description")
+
+    # Match-job command (Step 18: Deterministic Job Matcher)
+    match_job_parser = subparsers.add_parser("match-job", help="Perform deterministic matching between a resume and job description")
+    match_job_parser.add_argument("--resume-id", type=str, required=True, help="Document ID or filename of the resume")
+    match_job_parser.add_argument("--job-id", type=str, required=True, help="Document ID or filename of the job description")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -1183,6 +1367,19 @@ def main():
         )
     elif args.command == "study-plans":
         cmd_study_plans()
+    elif args.command == "career-docs":
+        cmd_career_docs()
+    elif args.command == "career-ask":
+        cmd_career_ask(
+            args.question,
+            top_k=args.top_k,
+            document_type=args.type,
+            document_id=args.document_id,
+        )
+    elif args.command == "career-skills":
+        cmd_career_skills(document_id=args.document_id)
+    elif args.command == "match-job":
+        cmd_match_job(resume_id=args.resume_id, job_id=args.job_id)
     elif args.command == "evaluate":
         cmd_evaluate(
             eval_file=args.file,

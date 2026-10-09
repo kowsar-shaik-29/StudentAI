@@ -164,3 +164,29 @@ Step 17 turns learning analytics and personalized recommendations into determini
   - `python -m src.main study-plan --subject <SUBJECT> [--days 7] [--minutes 60]`: Generate a structured study schedule.
   - `python -m src.main revision [--subject <SUBJECT>] [--limit 5]`: View prioritized revision recommendations.
   - `python -m src.main study-plans`: Inspect saved study plans.
+
+---
+
+## Step 18: Career RAG and Resume/Job Matching
+
+Step 18 introduces a modular Career RAG subsystem for candidate resumes and job postings:
+- **Career Domain Isolation (`src/career_rag.py`)**:
+  - `answer_career_question(query, top_k=5, document_type=None, document_id=None)`: Scopes question answering strictly to documents with `category="career"` (e.g. `document_type="resume"` or `"job_description"`).
+  - Grounded answering with citations (`[Page X]`) and prompt injection defense (untrusted candidate/job document text).
+  - Explicit refusal when queries fall outside the indexed career corpus: `"I couldn't find the answer in the career documents."`
+- **Structured Skill Extractor (`src/skill_extractor.py`)**:
+  - `extract_skills(text, document_type="other", client=None, model=None, page_number=None)`: Extracts canonical and normalized skill names, skill types (`language`, `framework`, `database`, `cloud`, `tool`, `concept`, etc.), and verbatim textual evidence quotes from document text.
+  - Temperature 0.0 with strict JSON schema and sanitized error handling.
+- **Deterministic Job Matcher (`src/job_matcher.py`)**:
+  - `match_resume_to_job(resume_skills, job_requirements)`: Deterministic matching between candidate resume skills and job requirements.
+  - **No LLM in matching**: Skill comparisons and coverage scores are 100% deterministic (no LLM hallucination or arbitrary scoring).
+  - **Exact and Canonical Alias Matching**: Handles equivalent technologies (e.g., `js` -> `javascript`, `postgres` -> `postgresql`, `k8s` -> `kubernetes`, `aws` -> `amazon web services`).
+  - **Distinction of Disjoint Technologies**: Never conflates distinct technologies (e.g., `Java` and `JavaScript` never match).
+  - **Partial Matches**: Identified and reported separately for transparency; strictly **not counted** in the coverage percentage.
+  - **Deterministic Coverage Score**: `coverage_percentage = (matched_count / requirement_count) * 100.0` (or `0.0` when requirements count is 0).
+  - **Transparent Disclaimer**: Explicitly identifies output as deterministic keyword matching, not an ATS score, hiring probability, or certified qualification metric.
+- **CLI Commands**:
+  - `python -m src.main career-docs`: List all indexed career documents with their document IDs and types.
+  - `python -m src.main career-ask "<query>" [--type resume|job_description] [--document-id <ID>]`: Ask questions about candidate resumes or job postings.
+  - `python -m src.main career-skills --document-id <ID>`: Extract explicit skills, categories, and evidence quotes from an indexed document.
+  - `python -m src.main match-job --resume-id <RESUME_ID> --job-id <JOB_ID>`: Perform deterministic skill match and gap analysis between candidate and job posting.
