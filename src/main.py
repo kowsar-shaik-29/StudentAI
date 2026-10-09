@@ -70,6 +70,13 @@ from src.career_rag import (
 )
 from src.skill_extractor import extract_skills
 from src.job_matcher import match_resume_to_job
+from src.project_rag import (
+    answer_project_question,
+    list_projects,
+    summarize_project,
+    compare_projects,
+)
+from src.project_interview import generate_project_interview_questions
 
 
 
@@ -1016,6 +1023,179 @@ def cmd_match_job(resume_id: str, job_id: str) -> None:
     print("=" * 70)
 
 
+def cmd_projects() -> None:
+    """Lists indexed student software projects and their documented files."""
+    sr = get_sparse_retriever()
+    projs = list_projects(sparse_retriever=sr)
+    print("=" * 70)
+    print("INDEXED SOFTWARE PROJECTS")
+    print("=" * 70)
+    if not projs:
+        print("\nNo project documentation indexed yet.\nIngest project files with:")
+        print("  python -m src.main ingest <path-to-file> --category project --type project_documentation --subject <project_id>\n")
+    else:
+        for idx, p in enumerate(projs, start=1):
+            print(f"{idx}. Project:    {p['project_name']}")
+            print(f"   Project ID: {p['project_id']}")
+            print(f"   Documents:  {p['document_count']} ({', '.join(p['filenames'])})")
+            print()
+    print("=" * 70)
+
+
+def cmd_project_ask(
+    query: str,
+    project_id: Optional[str] = None,
+    top_k: int = 5,
+) -> None:
+    """Answers questions grounded strictly in project documentation."""
+    require_api_key()
+    print("=" * 70)
+    print("STUDENTAI PROJECT RAG")
+    print("=" * 70)
+    print(f"Question:   {query}")
+    if project_id:
+        print(f"Project ID: {project_id}")
+    print("-" * 70)
+
+    res = answer_project_question(
+        query=query,
+        project_id=project_id,
+        top_k=top_k,
+    )
+
+    if res.get("ambiguous"):
+        print("\nAMBIGUITY NOTICE:")
+        print(res["answer"])
+        print("=" * 70)
+        return
+
+    print("\nANSWER:")
+    print(res["answer"])
+    print("\n" + "-" * 70)
+    print(f"SOURCES ({len(res['sources'])} retrieved):")
+    if not res["sources"]:
+        print("None")
+    for idx, s in enumerate(res["sources"], start=1):
+        score_val = s.get("score", 0.0)
+        print(f"{idx}. [{s['file_name']}] Page {s['page_number']} (Score: {score_val:.4f}, Type: {s['document_type']})")
+    print("=" * 70)
+
+
+def cmd_project_summary(project_id: str) -> None:
+    """Generates a structured technical summary of a project."""
+    require_api_key()
+    print("=" * 70)
+    print("PROJECT TECHNICAL SUMMARY")
+    print("=" * 70)
+    print(f"Project ID: {project_id}")
+    print("-" * 70)
+
+    try:
+        summary = summarize_project(project_id)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    print(f"\nProject Name:   {summary.get('project_name', project_id)}")
+    print(f"Purpose:        {summary.get('documented_purpose', 'Unknown')}")
+    print(f"Architecture:   {summary.get('documented_architecture', 'Unknown')}")
+    print("\nDocumented Technologies:")
+    for tech in summary.get("documented_technologies", []):
+        print(f"- {tech}")
+    if not summary.get("documented_technologies"):
+        print("- None documented")
+
+    print("\nDocumented Features:")
+    for feat in summary.get("documented_features", []):
+        print(f"- {feat}")
+    if not summary.get("documented_features"):
+        print("- None documented")
+
+    print("\nDocumented Limitations / Tradeoffs:")
+    for lim in summary.get("documented_limitations", []):
+        print(f"- {lim}")
+    if not summary.get("documented_limitations"):
+        print("- None documented")
+
+    print(f"\nSources: {', '.join(summary.get('sources', []))}")
+    print("=" * 70)
+
+
+def cmd_project_interview(
+    project_id: str,
+    count: int = 5,
+    difficulty: str = "MIXED",
+) -> None:
+    """Generates grounded technical interview questions for a project."""
+    require_api_key()
+    print("=" * 70)
+    print("PROJECT-AWARE INTERVIEW PREPARATION")
+    print("=" * 70)
+    print(f"Project ID:  {project_id}")
+    print(f"Questions:   {count}")
+    print(f"Difficulty:  {difficulty}")
+    print("-" * 70)
+
+    res = generate_project_interview_questions(
+        project_id=project_id,
+        count=count,
+        difficulty=difficulty,
+    )
+
+    if res.get("insufficient_evidence"):
+        print(f"\nNotice: {res.get('message', 'Insufficient documentation to generate questions.')}")
+        print("=" * 70)
+        return
+
+    print(f"\nGenerated {res['generated_count']} Questions for {res['project_name']}:\n")
+    for idx, q in enumerate(res["questions"], start=1):
+        print(f"{idx}. [{q['difficulty']}] ({q['topic'].upper()})")
+        print(f"   Question: {q['question']}")
+        if q.get("answer_outline"):
+            print(f"   Expected Key Points: {q['answer_outline']}")
+        print(f"   Evidence: {q['evidence_summary']} ([{q['source_filename']}] Page {q['page_number']})")
+        print()
+    print("=" * 70)
+
+
+def cmd_project_compare(project_id_a: str, project_id_b: str) -> None:
+    """Compares two documented software projects."""
+    require_api_key()
+    print("=" * 70)
+    print("PROJECT ARCHITECTURE & STACK COMPARISON")
+    print("=" * 70)
+    print(f"Project A: {project_id_a}")
+    print(f"Project B: {project_id_b}")
+    print("-" * 70)
+
+    try:
+        cmp_res = compare_projects(project_id_a, project_id_b)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    tbl = cmp_res["comparison_table"]
+    pa_name = cmp_res["project_a"].get("project_name", project_id_a)
+    pb_name = cmp_res["project_b"].get("project_name", project_id_b)
+
+    print(f"\n1. Purpose:")
+    print(f"   {pa_name}: {tbl['purpose'].get(pa_name, 'Unknown')}")
+    print(f"   {pb_name}: {tbl['purpose'].get(pb_name, 'Unknown')}")
+
+    print(f"\n2. Documented Architecture:")
+    print(f"   {pa_name}: {tbl['architecture'].get(pa_name, 'Unknown')}")
+    print(f"   {pb_name}: {tbl['architecture'].get(pb_name, 'Unknown')}")
+
+    print(f"\n3. Technologies:")
+    print(f"   {pa_name}: {', '.join(tbl['technologies'].get(pa_name, []))}")
+    print(f"   {pb_name}: {', '.join(tbl['technologies'].get(pb_name, []))}")
+
+    print(f"\n4. Limitations & Tradeoffs:")
+    print(f"   {pa_name}: {', '.join(tbl['limitations'].get(pa_name, []))}")
+    print(f"   {pb_name}: {', '.join(tbl['limitations'].get(pb_name, []))}")
+    print("\n" + "=" * 70)
+
+
 def cmd_evaluate(
     eval_file: str = "data/evaluation/rag_eval.json",
     top_k: int = 5,
@@ -1285,6 +1465,30 @@ def main():
     match_job_parser.add_argument("--resume-id", type=str, required=True, help="Document ID or filename of the resume")
     match_job_parser.add_argument("--job-id", type=str, required=True, help="Document ID or filename of the job description")
 
+    # Projects command (Step 19: Project RAG)
+    subparsers.add_parser("projects", help="List indexed student software projects and their documented files")
+
+    # Project-ask command (Step 19: Project RAG)
+    project_ask_parser = subparsers.add_parser("project-ask", help="Ask a question grounded in software project documentation")
+    project_ask_parser.add_argument("question", type=str, help="Question about project architecture, tech stack, or implementation")
+    project_ask_parser.add_argument("--project-id", type=str, default=None, help="Specific project identifier to isolate retrieval")
+    project_ask_parser.add_argument("--top-k", type=int, default=5, help="Number of context passages to retrieve")
+
+    # Project-summary command (Step 19: Project Summary)
+    project_sum_parser = subparsers.add_parser("project-summary", help="Generate a structured technical summary of a project")
+    project_sum_parser.add_argument("--project-id", type=str, required=True, help="Project identifier or project name")
+
+    # Project-interview command (Step 19: Project-Aware Interview Preparation)
+    project_int_parser = subparsers.add_parser("project-interview", help="Generate grounded technical interview questions from project documentation")
+    project_int_parser.add_argument("--project-id", type=str, required=True, help="Project identifier or project name")
+    project_int_parser.add_argument("--count", type=int, default=5, help="Number of interview questions to generate (default: 5)")
+    project_int_parser.add_argument("--difficulty", type=str, default="MIXED", choices=["EASY", "MEDIUM", "HARD", "MIXED"], help="Target question difficulty (default: MIXED)")
+
+    # Project-compare command (Step 19: Project Comparison)
+    project_cmp_parser = subparsers.add_parser("project-compare", help="Compare two documented software projects")
+    project_cmp_parser.add_argument("--project-a", type=str, required=True, help="First project identifier")
+    project_cmp_parser.add_argument("--project-b", type=str, required=True, help="Second project identifier")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -1380,6 +1584,27 @@ def main():
         cmd_career_skills(document_id=args.document_id)
     elif args.command == "match-job":
         cmd_match_job(resume_id=args.resume_id, job_id=args.job_id)
+    elif args.command == "projects":
+        cmd_projects()
+    elif args.command == "project-ask":
+        cmd_project_ask(
+            args.question,
+            project_id=args.project_id,
+            top_k=args.top_k,
+        )
+    elif args.command == "project-summary":
+        cmd_project_summary(project_id=args.project_id)
+    elif args.command == "project-interview":
+        cmd_project_interview(
+            project_id=args.project_id,
+            count=args.count,
+            difficulty=args.difficulty,
+        )
+    elif args.command == "project-compare":
+        cmd_project_compare(
+            project_id_a=args.project_a,
+            project_id_b=args.project_b,
+        )
     elif args.command == "evaluate":
         cmd_evaluate(
             eval_file=args.file,

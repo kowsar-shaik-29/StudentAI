@@ -18,7 +18,7 @@ from typing import List, Dict, Any, Optional, Union
 import qdrant_client
 from google import genai
 from src.config import get_settings, require_api_key
-from src.extractor import extract_pdf
+from src.extractor import extract_pdf, extract_document
 from src.chunker import create_chunks
 from src.embedder import embed_chunks
 from src.vector_store import (
@@ -84,8 +84,9 @@ def ingest_document(
     if not path.is_file():
         raise FileNotFoundError(f"PDF document not found at: {path}")
 
-    if path.suffix.lower() != ".pdf":
-        raise ValueError(f"Expected a PDF file with .pdf extension, got: {path.name}")
+    valid_exts = (".pdf", ".md", ".txt", ".markdown")
+    if path.suffix.lower() not in valid_exts:
+        raise ValueError(f"Expected a supported document ({', '.join(valid_exts)}), got: {path.name}")
 
     settings = get_settings()
     c_size = chunk_size or settings.chunk_size
@@ -101,7 +102,7 @@ def ingest_document(
         document_type=document_type,
     )
 
-    pages = extract_pdf(path, include_empty=True)
+    pages = extract_document(path, include_empty=True)
     pages_with_text = sum(1 for p in pages if p["has_text"])
 
     # Attach document metadata to each page so chunker propagates it

@@ -190,3 +190,32 @@ Step 18 introduces a modular Career RAG subsystem for candidate resumes and job 
   - `python -m src.main career-ask "<query>" [--type resume|job_description] [--document-id <ID>]`: Ask questions about candidate resumes or job postings.
   - `python -m src.main career-skills --document-id <ID>`: Extract explicit skills, categories, and evidence quotes from an indexed document.
   - `python -m src.main match-job --resume-id <RESUME_ID> --job-id <JOB_ID>`: Perform deterministic skill match and gap analysis between candidate and job posting.
+
+---
+
+## Step 19: Project RAG and Project-Aware Interview Preparation
+
+Step 19 introduces a modular Project RAG subsystem designed for student software projects, architecture explanations, technical documentation, and grounded interview preparation:
+- **Project Domain Isolation & Listing (`src/project_rag.py`)**:
+  - `list_projects()`: Discovers all indexed software projects, associated documents, document IDs, and types.
+  - `answer_project_question(query, project_id=None, top_k=5)`: Scopes question answering strictly to documents with `category="project"`. When a project ID is specified, retrieval is isolated to that specific project.
+  - **Ambiguity Guard**: If multiple projects exist and no project ID is specified, prompts the user to select one with `--project-id` rather than contaminating context across unrelated codebases.
+  - **Prompt Injection Defense**: Treats all documentation text as untrusted data (`--- UNTRUSTED PROJECT DOCUMENTATION ---`) with instructions preventing execution of embedded directives.
+  - **Grounded Refusal**: Returns `"I couldn't find the answer in the provided project documentation."` when requested information or unsupported features cannot be verified in the retrieved documents.
+- **Project Technical Summary & Comparison (`src/project_rag.py`)**:
+  - `summarize_project(project_id)`: Generates a structured JSON technical summary covering documented purpose, architecture, technologies, features, and limitations. Missing fields are explicitly marked `"Unknown"` rather than hallucinated.
+  - `compare_projects(project_id_a, project_id_b)`: Compares two documented projects across purpose, architecture, stack, storage, and limitations.
+- **Project-Aware Interview Preparation (`src/project_interview.py`)**:
+  - `generate_project_interview_questions(project_id, count=5, difficulty="MIXED")`: Generates technically rigorous interview questions based strictly on the project documentation.
+  - **Supported Difficulties**: `EASY`, `MEDIUM`, `HARD`, and `MIXED`.
+  - **Supported Categories**: `architecture`, `design_decisions`, `data_flow`, `technology_selection`, `error_handling`, `security`, `scalability`, `testing`, `tradeoffs`, `limitations`.
+  - **Deduplication & Grounding**: Deduplicates questions, provides expected answer outlines, evidence summaries, and preserves filename and page references for every generated question.
+- **Multi-Format Ingestion (`src/extractor.py`, `src/ingestion.py`)**:
+  - Unified `extract_document()` supporting `.pdf`, `.md`, `.txt`, and `.markdown`.
+  - Automatically indexes project documentation with `category="project"` and links them to designated project identifiers via `--subject <project_id>`.
+- **CLI Commands**:
+  - `python -m src.main projects`: Lists all indexed student projects and their documented files.
+  - `python -m src.main project-ask "<query>" [--project-id <ID>] [--top-k 5]`: Ask questions about software architecture, tech stack, or implementation.
+  - `python -m src.main project-summary --project-id <ID>`: Generate a structured technical summary of a project.
+  - `python -m src.main project-interview --project-id <ID> [--count 5] [--difficulty MIXED]`: Generate grounded technical interview questions.
+  - `python -m src.main project-compare --project-a <ID> --project-b <ID>`: Compare architectures and tech stacks of two documented projects.

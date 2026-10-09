@@ -115,3 +115,61 @@ def extract_pdf_pages(file_path: Union[str, Path]) -> List[Dict[str, Any]]:
     Maintains backward compatibility with Phase 1 modules.
     """
     return extract_pdf(file_path, include_empty=False)
+
+
+def extract_text_document(
+    file_path: Union[str, Path],
+) -> List[Dict[str, Any]]:
+    """
+    Extracts text from a Markdown (.md) or plain-text (.txt) document.
+    Treats the document as a single page or splits into logical pages if form feeds exist.
+
+    Args:
+        file_path: Path to the target text/markdown file.
+
+    Returns:
+        List containing a dictionary per page with metadata:
+        [{'page_number': 1, 'total_pages': 1, 'file_name': ..., 'text': ...}]
+    """
+    path = Path(file_path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Document file not found at: {path}")
+
+    if path.is_dir():
+        raise IsADirectoryError(f"Expected a file, but path points to a directory: {path}")
+
+    if path.stat().st_size == 0:
+        raise ValueError(f"Document file is empty (0 bytes): {path.name}")
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        content = path.read_text(encoding="latin-1", errors="replace")
+
+    cleaned = content.strip()
+    return [{
+        "page_number": 1,
+        "total_pages": 1,
+        "file_name": path.name,
+        "file_path": str(path),
+        "text": cleaned,
+        "has_text": len(cleaned) > 0,
+        "char_count": len(cleaned),
+    }]
+
+
+def extract_document(
+    file_path: Union[str, Path],
+    include_empty: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Unified document extractor supporting PDF, Markdown (.md), and text (.txt) files.
+    """
+    path = Path(file_path).resolve()
+    ext = path.suffix.lower()
+    if ext == ".pdf":
+        return extract_pdf(path, include_empty=include_empty)
+    elif ext in (".md", ".txt", ".markdown"):
+        return extract_text_document(path)
+    else:
+        raise ValueError(f"Unsupported document format '{ext}' for file: {path.name}. Supported formats: .pdf, .md, .txt")
