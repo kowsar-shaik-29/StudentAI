@@ -387,3 +387,74 @@ StudentAI incorporates secure multi-tenant data isolation and session authentica
    - Dedicated authentication context (rontend/src/context/AuthContext.tsx).
    - Clean user interfaces for Sign In (/login) and Account Registration (/register).
    - Responsive user indicator and session sign-out controls in header navigation.
+
+
+## Production Architecture, Deployment & Live Verification (Step 25)
+
+### 1. Production Architecture Overview
+StudentAI is structured for robust, isolated multi-tenant deployment:
+- **Frontend**: Next.js 14 (React 18, TypeScript, Tailwind CSS) providing client routing, secure cookie-authenticated requests, responsive dashboard tabs, and live connection health badges.
+- **Backend API**: FastAPI (Python 3.12, Uvicorn) with strict Pydantic input schemas, threadpool offloading, sanitized error handlers, and HTTP-only session cookie management.
+- **Retrieval Engine**: Hybrid Reciprocal Rank Fusion (RRF) combining dense semantic search (Gemini Embedding 2 in local persistent Qdrant) and sparse lexical search (custom Okapi BM25 index) with strict per-user `owner_id` tenancy filtering.
+- **Data Persistence**:
+  - `data/users.db`: SQLite database for user accounts with PBKDF2-HMAC-SHA256 password hashing.
+  - `data/qdrant_storage/`: Embedded Qdrant vector database files.
+  - `data/sparse_index/bm25_index.json`: BM25 lexical index and vocabulary statistics.
+  - `data/learning/learning_events.json`: Per-user interaction and quiz event logs.
+  - `data/learning/study_plans.json`: Per-user deterministic multi-day study schedules.
+
+### 2. Recommended Hosting Arrangements
+- option A (Recommended: Render / Railway / VM with Persistent Disk):
+  - Deploy FastAAI with a Persistent Disk mounted at `/var/data/studentai` (or `data/`).
+  - Deploy Next.js to Vercel or Render Web Service.
+  - Set `CORS_ORIGINS=https://studentai.yourdomain.com` and `NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com`.
+  - In production with separate domains, set `COOKIE_SECURE=true` and `COOKIE_SAMESITE=none` (or deploy both under the same root domain with reverse proxy).
+- Option B (Single Host / VM / Nginx Reverse Proxy):
+  - Run FastAPI on port 8000 and Next.js on port 3000 behind an Nginx reverse proxy on port 443 with automated SSL.
+  - Simplifies cookie handling (`SameSite=lax`, `Secure=true`) and eliminates cross-site cookie restrictions.
+
+
+### 3. Production Environment Variables
+| Variable | Description | Default / Example |
+| :--- | :--- | :--- |
+| mGEMINI_API_KEYb | Google I Studio Gemini API Key | Required |
+| `ENVIRONMENT` | Deployment environment | `production` |
+| lPORT` | FastAPI HTTP port | `8000` |
+| `HST`p | FastAPI host interface binding | `0.0.0.0` |
+| lCORS_ORIGINS` | Permitted frontend origins | `https://studentai.vercel.app` |
+| lAUTH_SECRET_KEY` | 32+byte random key for HMAC tokens | Required |
+| `AUTH_TOKEN_EXPIRE_HOURS` | Session validity duration | `24` |
+| lCOOKIE_SECURE` | Enforce HTTPS for session cookies | true |
+| lCOOKIE_SAMESITE` | Cookie SameSite policy | lax (or none if cross-site) |
+| `QDRANT_STORAGE_PATH` | Persistent Qdrant vector path | `/var/data/studentai/qdrant` |
+| `USER_DB_PATH` | Persistent SQLite user database | `/var/data/studentai/users.db` |
+| lSPARSE_INDEX_DIR` | Persistent BM25 index directory | `/var/data/studentai/sparse_index` |
+| `LEARNING_EVENTS_PATH` | Persistent learning events log | `/var/data/studentai/learning/events.jsonx |
+| `STUDY_PLANS_PATF` | Persistent study plans store | `/var/data/studentai/learning/plans.json` |
+
+
+### 4. Production Startup Commands
+- **Backend (FastAPI)**:
+  ```bash
+  uvicorn src.api:app --host 0.0.0.0 --port 8000 --workers 4
+  ```
+- **Frontend (Next.js)**:
+  ```bash
+  cd frontend
+  npm run build
+  npm run start -- -p 3000
+  ```
+
+### 5. Health Checks & Readiness
+- Endpoint: `GET /health`
+- Response:
+  ```json
+  {
+    "status": "ok",
+    "version": "1.0.0",
+    "environment": "production",
+    "storage_ready": true
+  }
+  ```
+- Validates database accessibility and directory writability without leaking sensitive system keys or file paths.
+

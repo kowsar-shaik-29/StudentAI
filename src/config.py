@@ -43,7 +43,12 @@ class Settings:
     # Sparse Index Configuration
     sparse_index_dir: Path = BASE_DIR / os.getenv("SPARSE_INDEX_DIR", "data/sparse_index")
 
+    # Learning & Study Storage Configuration
+    learning_events_path: Path = BASE_DIR / os.getenv("LEARNING_EVENTS_PATH", "data/learning/learning_events.json")
+    study_plans_path: Path = BASE_DIR / os.getenv("STUDY_PLANS_PATH", "data/learning/study_plans.json")
+
     # API Configuration
+    environment: str = os.getenv("ENVIRONMENT", "development").lower()
     app_version: str = "1.0.0"
     cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 
@@ -51,6 +56,8 @@ class Settings:
     user_db_path: Path = BASE_DIR / os.getenv("USER_DB_PATH", "data/users.db")
     auth_secret_key: str = os.getenv("AUTH_SECRET_KEY", "studentai-dev-secret-change-in-production-key-32b")
     auth_token_expire_hours: int = int(os.getenv("AUTH_TOKEN_EXPIRE_HOURS", "24"))
+    cookie_secure: bool = os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
+    cookie_samesite: str = os.getenv("COOKIE_SAMESITE", "lax").lower()
 
 
 

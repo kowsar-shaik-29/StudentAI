@@ -1,4 +1,4 @@
-﻿"""
+"""
 Learning Tracker Module for StudentAI.
 Tracks learning interactions, quiz outcomes, and query topics.
 Persists learning events to a local JSON file: data/learning/learning_events.json.
@@ -10,8 +10,15 @@ from pathlib import Path
 from datetime import datetime, timezone
 import json
 import uuid
+from src.config import get_settings
 
 DEFAULT_EVENTS_PATH = Path("data/learning/learning_events.json")
+
+def get_default_events_path() -> Path:
+    try:
+        return get_settings().learning_events_path
+    except Exception:
+        return DEFAULT_EVENTS_PATH
 
 VALID_STATUSES = {"ANSWERED", "REFUSED", "QUIZ_GENERATED", "QUIZ_ATTEMPTED"}
 
@@ -42,7 +49,7 @@ def _ensure_storage_dir(path: Path) -> None:
 
 def load_all_events(storage_path: Optional[Path] = None) -> List[Dict[str, Any]]:
     """Loads all learning event dictionaries from storage file."""
-    path = storage_path or DEFAULT_EVENTS_PATH
+    path = storage_path or get_default_events_path()
     if not path.is_file():
         return []
     try:
@@ -57,7 +64,7 @@ def load_all_events(storage_path: Optional[Path] = None) -> List[Dict[str, Any]]
 
 def save_all_events(events: List[Dict[str, Any]], storage_path: Optional[Path] = None) -> None:
     """Saves learning event dictionaries to storage file atomically."""
-    path = storage_path or DEFAULT_EVENTS_PATH
+    path = storage_path or get_default_events_path()
     _ensure_storage_dir(path)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(events, f, indent=2, ensure_ascii=False)

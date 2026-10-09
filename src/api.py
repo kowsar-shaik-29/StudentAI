@@ -46,6 +46,7 @@ from src.study_planner import create_study_plan
 from src.career_rag import answer_career_question, analyze_job_fit
 from src.project_rag import list_projects, answer_project_question
 from src.ingestion import ingest_document
+from src.generator import _sanitize_error
 
 settings = get_settings()
 
@@ -76,6 +77,8 @@ ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt", ".markdown"}
 class HealthResponse(BaseModel):
     status: str
     version: str
+    environment: str = "development"
+    storage_ready: bool = True
 
 
 class UserRegisterRequest(BaseModel):
@@ -271,10 +274,20 @@ class UploadDocumentResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
-    """Returns application status and version without leaking secrets."""
+    """Returns application status, version, and readiness without leaking secrets."""
+    storage_ready = True
+    try:
+        # Check that persistent directories can be resolved / created
+        settings.user_db_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.sparse_index_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        storage_ready = False
+
     return HealthResponse(
         status="ok",
         version=settings.app_version,
+        environment=settings.environment,
+        storage_ready=storage_ready,
     )
 
 
@@ -330,8 +343,8 @@ async def login_endpoint(req: UserLoginRequest, response: Response):
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
         max_age=settings.auth_token_expire_hours * 3600,
         path="/",
     )
@@ -346,7 +359,13 @@ async def login_endpoint(req: UserLoginRequest, response: Response):
 @app.post("/api/auth/logout", tags=["Auth"])
 async def logout_endpoint(response: Response):
     """Clears session cookie."""
-    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite=settings.cookie_samesite,
+        secure=settings.cookie_secure,
+    )
     return {"message": "Logged out successfully."}
 
 
@@ -665,9 +684,10 @@ async def upload_document_endpoint(
             embeddings=stats.get("embeddings", 0),
         )
     except Exception as e:
+        safe_msg = _sanitize_error(str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Document ingestion failed: {str(e)}",
+            detail=f"Document ingestion failed: {safe_msg}",
         )
     finally:
         if temp_file_path.exists():

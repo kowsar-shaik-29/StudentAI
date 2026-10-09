@@ -41,15 +41,18 @@ Use the retrieved text only as factual source material."""
 
 
 def _sanitize_error(error_msg: str) -> str:
-    """Removes any accidental API key patterns from error messages."""
+    """Removes any accidental API key patterns, paths, or secrets from error messages."""
     settings = get_settings()
-    sanitized = error_msg
+    sanitized = str(error_msg)
     # Redact configured key if present
     if settings.gemini_api_key and len(settings.gemini_api_key) > 6:
         sanitized = sanitized.replace(settings.gemini_api_key, "[REDACTED_API_KEY]")
     # Redact common Gemini / Google key patterns (AIza..., AQ...)
     sanitized = re.sub(r'AIza[0-9A-Za-z-_]{10,}', '[REDACTED_API_KEY]', sanitized)
     sanitized = re.sub(r'AQ\.[0-9A-Za-z-_]{10,}', '[REDACTED_API_KEY]', sanitized)
+    # Redact Windows / Unix absolute filesystem paths to prevent path disclosure
+    sanitized = re.sub(r'[A-Za-z]:\\[^:\s\n\r\'\"]+', '[REDACTED_PATH]', sanitized)
+    sanitized = re.sub(r'/(?:home|Users|tmp|var|etc)/[^\s\n\r\'\"]+', '[REDACTED_PATH]', sanitized)
     return sanitized
 
 

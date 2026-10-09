@@ -19,8 +19,15 @@ import uuid
 from src.learning_analytics import get_subtopic_statistics
 from src.recommendation_engine import find_academic_sources
 from src.sparse_retriever import get_sparse_retriever, SparseRetriever
+from src.config import get_settings
 
 DEFAULT_PLANS_PATH = Path("data/learning/study_plans.json")
+
+def get_default_plans_path() -> Path:
+    try:
+        return get_settings().study_plans_path
+    except Exception:
+        return DEFAULT_PLANS_PATH
 
 SUBJECT_ALIASES: Dict[str, List[str]] = {
     "dbms": ["dbms", "database", "databases", "database management", "database management systems", "sql"],
@@ -63,7 +70,7 @@ def _ensure_plans_dir(path: Path) -> None:
 
 
 def load_all_study_plans(storage_path: Optional[Path] = None) -> List[Dict[str, Any]]:
-    path = storage_path or DEFAULT_PLANS_PATH
+    path = storage_path or get_default_plans_path()
     if not path.is_file():
         return []
     try:
@@ -77,7 +84,7 @@ def load_all_study_plans(storage_path: Optional[Path] = None) -> List[Dict[str, 
 
 
 def save_study_plan(plan_data: Dict[str, Any], storage_path: Optional[Path] = None) -> None:
-    path = storage_path or DEFAULT_PLANS_PATH
+    path = storage_path or get_default_plans_path()
     _ensure_plans_dir(path)
     plans = load_all_study_plans(path)
     plans.append(plan_data)
