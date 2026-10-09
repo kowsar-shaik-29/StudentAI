@@ -14,6 +14,7 @@ from google import genai
 from src.rag import answer_question
 from src.context_builder import extract_page_citations
 from src.sparse_retriever import SparseRetriever
+from src.citation_verifier import verify_citations
 
 
 STANDARD_REFUSAL_PHRASE = "I couldn't find the answer in the provided documents."
@@ -77,6 +78,13 @@ def check_generation_response(
         doc_in_sources = any(d in source_docs for d in expected_docs)
         passed = non_empty and has_citation and citation_page_matches and doc_in_sources
 
+    # Full citation verification check
+    citation_report = verify_citations(
+        answer=answer_text,
+        sources=sources,
+        expected_documents=list(expected_docs) if expected_docs else None,
+    )
+
     return {
         "id": item_id,
         "question": question,
@@ -86,6 +94,7 @@ def check_generation_response(
         "citation_matches_expected_page": citation_page_matches,
         "expected_doc_in_sources": doc_in_sources,
         "refusal_correct": refusal_correct,
+        "citation_report": citation_report,
         "passed": passed,
         "answer": answer_text,
         "cited_pages": cited_pages,

@@ -423,8 +423,9 @@ def cmd_ask(
     category: str = None,
     subject: str = None,
     document_type: str = None,
+    rewrite: bool = False,
 ) -> None:
-    """Executes end-to-end RAG question answering with optional reranking or hybrid retrieval and metadata filters."""
+    """Executes end-to-end RAG question answering with optional reranking or hybrid retrieval, query rewriting, and metadata filters."""
     require_api_key()
 
     print("=" * 60)
@@ -433,6 +434,8 @@ def cmd_ask(
     print(f"\nQuestion:\n{question.strip()}\n")
     if category or subject or document_type:
         print(f"Filter -> Category: {category or 'ANY'} | Subject: {subject or 'ANY'} | Type: {document_type or 'ANY'}\n")
+    if rewrite:
+        print("Query Rewriting: Enabled\n")
     if hybrid:
         print("Retrieval Mode: Hybrid (Dense + Sparse BM25 RRF)\n")
     elif rerank:
@@ -447,13 +450,39 @@ def cmd_ask(
         category=category,
         subject=subject,
         document_type=document_type,
+        rewrite=rewrite,
     )
+
+    if result.get("query_rewrite") and result["query_rewrite"].get("is_rewritten"):
+        print(f"Rewritten Query:\n{result['query_rewrite']['rewritten_query']}\n")
+        print(f"Rewrite Reason:\n{result['query_rewrite']['reason']}\n")
 
     print("-" * 60)
     print("ANSWER")
     print("-" * 60)
     print(result["answer"])
     print()
+
+    # Citation Verification Summary
+    citations_info = result.get("citations")
+    if citations_info:
+        print("-" * 60)
+        print("CITATION VERIFICATION")
+        print("-" * 60)
+        valid_status = "VALID" if citations_info["is_valid"] else "INVALID"
+        print(f"Status:             {valid_status}")
+        if citations_info["cited_pages"]:
+            print(f"Cited Pages:        {citations_info['cited_pages']}")
+            print(f"Valid Pages:        {citations_info['valid_pages']}")
+        else:
+            print("Cited Pages:        None")
+        if citations_info["invalid_pages"]:
+            print(f"Invalid Pages:      {citations_info['invalid_pages']}")
+        if citations_info["malformed_citations"]:
+            print(f"Malformed Citations:{citations_info['malformed_citations']}")
+        if citations_info["errors"]:
+            print(f"Errors:             {citations_info['errors']}")
+        print()
 
     print("-" * 60)
     print("SOURCES")
@@ -1227,12 +1256,13 @@ def cmd_evaluate(
     print(f"Questions:\n{len(eval_dataset)}\n")
 
     # 1. Retrieval Evaluation across modes
-    modes = ["dense", "sparse", "hybrid", "hybrid_rerank"]
+    modes = ["dense", "sparse", "hybrid", "hybrid_rerank", "hybrid_rewrite"]
     mode_labels = {
         "dense": "Dense",
         "sparse": "Sparse",
         "hybrid": "Hybrid",
         "hybrid_rerank": "Hybrid + Reranker",
+        "hybrid_rewrite": "Hybrid + Rewriter",
     }
     mode_eval_results = {}
 
@@ -1388,6 +1418,7 @@ def main():
     ask_parser.add_argument("--category", type=str, default=None, help="Filter context by document category")
     ask_parser.add_argument("--subject", type=str, default=None, help="Filter context by document subject")
     ask_parser.add_argument("--type", type=str, default=None, help="Filter context by document type")
+    ask_parser.add_argument("--rewrite", action="store_true", help="Enable conservative query rewriting before retrieval")
 
     # Ask-auto command (Step 13: Query Routing)
     ask_auto_parser = subparsers.add_parser("ask-auto", help="Ask a question with automated query routing and metadata filtering")
@@ -1528,6 +1559,7 @@ def main():
             category=args.category,
             subject=args.subject,
             document_type=args.type,
+            rewrite=args.rewrite,
         )
     elif args.command == "ask-auto":
         cmd_ask_auto(

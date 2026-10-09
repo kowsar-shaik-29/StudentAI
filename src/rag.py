@@ -39,6 +39,7 @@ def answer_question(
     subject: Optional[str] = None,
     document_type: Optional[str] = None,
     document_id: Optional[str] = None,
+    rewrite: bool = False,
 ) -> Dict[str, Any]:
     """
     Executes complete end-to-end RAG pipeline for a given user question.
@@ -89,6 +90,15 @@ def answer_question(
         raise ValueError(f"top_k must be a positive integer greater than 0, got {top_k}")
 
     clean_question = question.strip()
+    search_query = clean_question
+    rewrite_info = None
+
+    if rewrite:
+        from src.query_rewriter import rewrite_query
+        rewrite_info = rewrite_query(clean_question, client=genai_client)
+        if rewrite_info.get("is_rewritten") and rewrite_info.get("rewritten_query"):
+            search_query = rewrite_info["rewritten_query"]
+
     q_client = client or initialize_vector_store()
 
     try:
@@ -105,7 +115,7 @@ def answer_question(
         # Step 1: Retrieval (Dense, Hybrid, with optional Reranking)
         if hybrid:
             retrieved_chunks = hybrid_search(
-                query=clean_question,
+                query=search_query,
                 top_k=top_k,
                 client=q_client,
                 sparse_retriever=sparse_retriever,
@@ -114,7 +124,7 @@ def answer_question(
             )
         elif rerank:
             retrieved_chunks = search(
-                query=clean_question,
+                query=search_query,
                 top_k=top_k,
                 client=q_client,
                 collection_name=collection_name,
@@ -125,7 +135,7 @@ def answer_question(
             )
         else:
             retrieved_chunks = search(
-                query=clean_question,
+                query=search_query,
                 top_k=top_k,
                 client=q_client,
                 collection_name=collection_name,
@@ -164,11 +174,20 @@ def answer_question(
             src_entry["rerank_score"] = item["rerank_score"]
         sources.append(src_entry)
 
-    return {
+    # Step 5: Citation Verification
+    from src.citation_verifier import verify_citations
+    citation_report = verify_citations(answer=answer_text, sources=sources)
+
+    result_payload = {
         "question": clean_question,
         "answer": answer_text,
         "sources": sources,
+        "citations": citation_report,
     }
+    if rewrite_info:
+        result_payload["query_rewrite"] = rewrite_info
+
+    return result_payload
 
 
 def answer_question_auto(

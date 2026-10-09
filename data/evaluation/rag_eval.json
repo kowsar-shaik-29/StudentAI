@@ -115,5 +115,32 @@
     "expected_pages": [],
     "expected_chunk_ids": [],
     "answerable": false
+  },
+  {
+    "id": "eval_14",
+    "question": "What frontend framework is used in the Expense Tracker Application?",
+    "category": "project_specific",
+    "expected_documents": ["sample_project.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["sample_project.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_15",
+    "question": "What skills are listed on Alice Smith's resume?",
+    "category": "career_specific",
+    "expected_documents": ["sample_resume.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["sample_resume.pdf_p1_c0"],
+    "answerable": true
+  },
+  {
+    "id": "eval_16",
+    "question": "What cloud provider is documented for the Expense Tracker microservices deployment?",
+    "category": "project_specific",
+    "expected_documents": ["sample_project.pdf"],
+    "expected_pages": [1],
+    "expected_chunk_ids": ["sample_project.pdf_p1_c0"],
+    "answerable": true
   }
 ]

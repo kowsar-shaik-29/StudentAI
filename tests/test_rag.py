@@ -93,6 +93,48 @@ class TestRAG(unittest.TestCase):
             answer_question("Question?", client=mock_qdrant)
         self.assertIn("Gemini rate limit exceeded", str(ctx.exception))
 
+    @patch("src.query_rewriter.rewrite_query")
+    @patch("src.rag.search")
+    @patch("src.rag.generate_answer")
+    def test_rag_with_rewrite(self, mock_gen, mock_search, mock_rewrite):
+        mock_rewrite.return_value = {
+            "original_query": "NIC",
+            "rewritten_query": "Network Interface Card MAC address",
+            "is_rewritten": True,
+            "reason": "Expanded abbreviation",
+        }
+        mock_search.return_value = [{
+            "score": 0.9,
+            "file_name": "net.pdf",
+            "page_number": 2,
+            "chunk_id": "net.pdf_p2_c0",
+            "text": "A Network Interface Card connects to a LAN.",
+        }]
+        mock_gen.return_value = "A NIC is a Network Interface Card. [Page 2]"
+        mock_qdrant = MagicMock()
+        mock_genai = MagicMock()
+
+        result = answer_question(
+            question="NIC",
+            top_k=2,
+            client=mock_qdrant,
+            genai_client=mock_genai,
+            rewrite=True,
+        )
+
+        mock_rewrite.assert_called_once_with("NIC", client=mock_genai)
+        mock_search.assert_called_once_with(
+            query="Network Interface Card MAC address",
+            top_k=2,
+            client=mock_qdrant,
+            collection_name=None,
+        )
+        self.assertIn("query_rewrite", result)
+        self.assertEqual(result["query_rewrite"]["rewritten_query"], "Network Interface Card MAC address")
+        self.assertIn("citations", result)
+        self.assertTrue(result["citations"]["is_valid"])
+        self.assertEqual(result["citations"]["cited_pages"], [2])
+
 
 if __name__ == "__main__":
     unittest.main()

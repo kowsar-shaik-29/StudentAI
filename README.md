@@ -219,3 +219,35 @@ Step 19 introduces a modular Project RAG subsystem designed for student software
   - `python -m src.main project-summary --project-id <ID>`: Generate a structured technical summary of a project.
   - `python -m src.main project-interview --project-id <ID> [--count 5] [--difficulty MIXED]`: Generate grounded technical interview questions.
   - `python -m src.main project-compare --project-a <ID> --project-b <ID>`: Compare architectures and tech stacks of two documented projects.
+
+---
+
+## Step 20: Advanced RAG Quality and Reliability
+
+Step 20 enhances retrieval quality, context selection, citation reliability, and benchmark evaluation across all domains:
+- **Conservative Query Rewriting (src/query_rewriter.py)**:
+  - ewrite_query(query, client=None, model=None): Conservatively expands technical acronyms, abbreviations, and informal jargon (e.g., NIC -> Network Interface Card MAC address, ACID -> ACID properties atomicity consistency isolation durability database transactions).
+  - **Intent Preservation & Guardrails**: Treats user queries as untrusted data to defend against prompt injection. Preserves user intent strictly without hallucinating technologies.
+  - **Fallback Safety**: Gracefully falls back to the original raw query upon JSON decode errors, API errors, or low confidence.
+  - **Strictly Opt-in**: Kept optional via --rewrite to prevent extra LLM latency and API costs on standard queries.
+- **Context Selection & Budget Enforcement (src/context_builder.py)**:
+  - Context deduplication by chunk ID and normalized text content.
+  - Character budget enforcement (max_chars parameter, default 12,000 chars) ensuring context stays within token limits while preserving multi-document evidence.
+  - Preserves document header metadata (Document: X | Page: Y | Chunk: Z) and extracts page citations (extract_page_citations()).
+- **Citation Verification (src/citation_verifier.py)**:
+  - erify_citations(answer, sources, expected_documents=None): Analyzes LLM response citations against retrieved context passages.
+  - Validates [Page X] citations against retrieved page numbers, reporting valid and invalid page citations.
+  - Detects malformed citation syntaxes (e.g., [page], [Page abc]).
+  - Distinguishes syntax validity from factual refusal (I couldn't find the answer in the provided documents.).
+- **Unified Multi-Mode Benchmark Evaluation (src/evaluator.py, src/generation_evaluator.py)**:
+  - Expanded benchmark dataset (data/evaluation/rag_eval.json) with cross-domain questions (academic, career, project, out-of-domain refusals).
+  - Benchmarks 5 distinct retrieval strategies on identical evaluation queries:
+    1. **Dense Retrieval** (Gemini embeddings + Qdrant cosine similarity)
+    2. **Sparse Retrieval** (BM25 term frequency)
+    3. **Hybrid Retrieval** (Dense + Sparse Reciprocal Rank Fusion)
+    4. **Hybrid + Reranker** (Dense + Sparse RRF + Gemini two-stage reranking)
+    5. **Hybrid + Rewriter** (Gemini query rewriting + Dense + Sparse RRF)
+  - End-to-end generation evaluation checking citation accuracy, expected document recall, and refusal correctness.
+- **CLI Commands**:
+  - python -m src.main ask <question> [--rewrite] [--hybrid] [--rerank]: Grounded QA with citation verification and optional query rewriting.
+  - python -m src.main evaluate [--file data/evaluation/rag_eval.json] [--top-k 5] [--skip-generation]: Run full multi-mode retrieval and generation benchmark suite.

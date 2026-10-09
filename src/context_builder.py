@@ -1,23 +1,36 @@
-"""
+﻿"""
 Context Builder Module.
-Transforms retrieved Qdrant search results into a clean, structured context string for LLM generation.
+Transforms retrieved Qdrant and BM25 search results into a clean, structured context string for LLM generation.
 
-Core Concept:
-In RAG, the context builder acts as the bridge between retrieval and generation.
-It formats each retrieved chunk with clear document and page attribution so the LLM
-can cite specific pages while answering.
+Core Concepts:
+1. Verifiable Page Attribution:
+   Formats each passage with clear document and page tags ([Document: X | Page: Y | Chunk: Z])
+   so the LLM can cite exact pages while answering.
+2. Deduplication:
+   Removes duplicate chunks (same chunk_id or identical text content).
+3. Context Budget & Overlap Management:
+   Enforces a configurable character budget (max_chars) while prioritizing top-ranked evidence.
+4. Multi-Document Support:
+   Preserves evidence across multiple distinct documents without discarding relevant cross-document passages.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Set
+import re
 
 
-def build_context(results: List[Dict[str, Any]]) -> str:
+def build_context(
+    results: List[Dict[str, Any]],
+    max_chars: Optional[int] = None,
+    deduplicate: bool = True,
+) -> str:
     """
     Constructs an augmented context string from retrieved search results.
 
     Args:
-        results: List of retrieved chunk dictionaries from src.retriever.search()
+        results: List of retrieved chunk dictionaries from hybrid_search() or search()
                  containing 'file_name', 'page_number', 'chunk_id', and 'text'.
+        max_chars: Optional maximum total characters in the output context string.
+        deduplicate: Whether to filter out duplicate chunks by ID or exact text.
 
     Returns:
         Structured string containing all retrieved passages with clear source demarcations.
@@ -26,16 +39,45 @@ def build_context(results: List[Dict[str, Any]]) -> str:
     if not results:
         return ""
 
-    passages = []
+    passages: List[str] = []
+    seen_chunk_ids: Set[str] = set()
+    seen_texts: Set[str] = set()
+    current_chars = 0
+
     for res in results:
+        cid = res.get("chunk_id", "unknown")
+        raw_text = res.get("text", "").strip()
+
+        if not raw_text:
+            continue
+
+        if deduplicate:
+            if cid in seen_chunk_ids:
+                continue
+            # Also check text hash / normalized string to prevent identical text under different IDs
+            norm_text = re.sub(r"\s+", " ", raw_text)
+            if norm_text in seen_texts:
+                continue
+            seen_chunk_ids.add(cid)
+            seen_texts.add(norm_text)
+
         file_name = res.get("file_name", "unknown")
         page_number = res.get("page_number", "?")
-        chunk_id = res.get("chunk_id", "unknown")
-        text = res.get("text", "").strip()
 
-        header = f"[Document: {file_name} | Page: {page_number} | Chunk: {chunk_id}]"
-        passage = f"{header}\n{text}"
+        header = f"[Document: {file_name} | Page: {page_number} | Chunk: {cid}]"
+        passage = f"{header}\n{raw_text}"
+
+        # Check character budget if specified
+        added_len = len(passage) + (len("\n\n---\n\n") if passages else 0)
+        if max_chars is not None and (current_chars + added_len > max_chars):
+            # If we already have at least one passage, stop adding
+            if passages:
+                break
+            # If first passage itself exceeds budget, truncate passage
+            passage = passage[:max_chars]
+
         passages.append(passage)
+        current_chars += len(passage)
 
     return "\n\n---\n\n".join(passages)
 
@@ -47,7 +89,6 @@ def extract_page_citations(text: str) -> List[int]:
     Returns:
         Sorted unique list of cited integer page numbers.
     """
-    import re
     if not text:
         return []
 
@@ -61,4 +102,3 @@ def extract_page_citations(text: str) -> List[int]:
             except ValueError:
                 pass
     return sorted(list(pages))
-

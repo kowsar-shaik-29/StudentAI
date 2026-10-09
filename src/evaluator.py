@@ -16,6 +16,7 @@ from src.retriever import search as dense_search
 from src.sparse_retriever import get_sparse_retriever, SparseRetriever
 from src.hybrid_retriever import hybrid_search
 from src.reranker import rerank as rerank_fn
+from src.query_rewriter import rewrite_query
 
 
 def calculate_retrieval_metrics(
@@ -164,6 +165,17 @@ def evaluate_retrieval_mode(
                 results=hybrid_candidates,
                 top_k=top_k,
                 client=genai_client,
+            )
+        elif mode == "hybrid_rewrite":
+            rw_res = rewrite_query(query=query, client=genai_client)
+            active_q = rw_res.get("rewritten_query") or query
+            results = hybrid_search(
+                query=active_q,
+                top_k=top_k,
+                dense_candidates=10,
+                sparse_candidates=10,
+                client=client,
+                sparse_retriever=sr,
             )
         else:
             raise ValueError(f"Unknown retrieval mode: {mode}")
