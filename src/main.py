@@ -1356,6 +1356,58 @@ def cmd_evaluate(
     q_client.close()
 
 
+def cmd_agent(query: str) -> None:
+    """Executes controlled agentic orchestration for a multi-domain or complex user goal."""
+    from src.agent_orchestrator import run_agent
+
+    print("=" * 70)
+    print("STUDENTAI AGENT ORCHESTRATOR")
+    print("=" * 70)
+    print(f"User Goal: {query.strip()}\n")
+
+    result = run_agent(user_query=query.strip())
+
+    print(f"Classification:   {result.classification}")
+    print(f"Workflow:         {result.workflow}")
+    print(f"Execution Time:   {result.total_duration_ms:.2f} ms")
+    print("-" * 70)
+    print("EXECUTION TRACE:")
+    for tr in result.execution_trace:
+        status_str = tr.status.upper()
+        print(f"Step {tr.step}: [{tr.tool_name}] -> {status_str} ({tr.duration_ms:.1f} ms)")
+        if tr.args:
+            print(f"  Args: {tr.args}")
+        if tr.error:
+            print(f"  Error: {tr.error}")
+    print("-" * 70)
+
+    print("\nSYNTHESIZED ANSWER:")
+    print(result.answer)
+    print()
+
+    if result.sources:
+        print("-" * 70)
+        print(f"SOURCES ({len(result.sources)} chunks cited/retrieved):")
+        for idx, s in enumerate(result.sources[:5], start=1):
+            print(f"{idx}. [{s.get('file_name', 'Unknown')}] Page {s.get('page_number', 0)} (Score: {s.get('score', 0.0):.4f})")
+
+    if result.citation_report and result.citation_report.get("has_citations"):
+        print("-" * 70)
+        valid_mark = "VALID" if result.citation_report["is_valid"] else "INVALID"
+        print(f"Citation Verification: {valid_mark}")
+        print(f"Cited Pages:           {result.citation_report['cited_pages']}")
+        if result.citation_report["invalid_pages"]:
+            print(f"Invalid Pages:         {result.citation_report['invalid_pages']}")
+
+    if result.limitations:
+        print("-" * 70)
+        print("LIMITATIONS & WARNINGS:")
+        for lim in result.limitations:
+            print(f"* {lim}")
+
+    print("=" * 70)
+
+
 def main():
     parser = argparse.ArgumentParser(description="StudentAI - Personal Knowledge, Learning & Career RAG")
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -1520,6 +1572,10 @@ def main():
     project_cmp_parser.add_argument("--project-a", type=str, required=True, help="First project identifier")
     project_cmp_parser.add_argument("--project-b", type=str, required=True, help="Second project identifier")
 
+    # Agent command (Step 21: Agentic Orchestration Layer)
+    agent_parser = subparsers.add_parser("agent", help="Execute multi-step goal using controlled agentic orchestrator")
+    agent_parser.add_argument("--query", "-q", type=str, required=True, help="User goal, question, or task")
+
     args = parser.parse_args()
 
     if args.command == "status":
@@ -1643,6 +1699,8 @@ def main():
             top_k=args.top_k,
             skip_generation=args.skip_generation,
         )
+    elif args.command == "agent":
+        cmd_agent(args.query)
     else:
         parser.print_help()
 

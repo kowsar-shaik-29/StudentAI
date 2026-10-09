@@ -251,3 +251,40 @@ Step 20 enhances retrieval quality, context selection, citation reliability, and
 - **CLI Commands**:
   - python -m src.main ask <question> [--rewrite] [--hybrid] [--rerank]: Grounded QA with citation verification and optional query rewriting.
   - python -m src.main evaluate [--file data/evaluation/rag_eval.json] [--top-k 5] [--skip-generation]: Run full multi-mode retrieval and generation benchmark suite.
+
+---
+
+## Step 21: Agentic Orchestration Layer
+
+Step 21 introduces a controlled, deterministic orchestration layer that understands user goals, selects minimal or multi-step capabilities, executes bounded tools, and synthesizes grounded answers:
+- **Strict Tool Registry (src/agent_tools.py)**:
+  - Exposes 11 registered StudentAI capabilities:
+    - learning_ask: Query academic concepts with notes and citations.
+    - learning_profile: Fetch student learning profile showing weak, strong, and unassessed topics.
+    - learning_recommendations: Fetch actionable next topics to study with grounded academic sources.
+    - evision_topics: View prioritized revision items based on weakness and quiz performance.
+    - create_study_plan: Generate deterministic multi-day study schedule.
+    - career_ask: Query resumes and job descriptions with grounded citations.
+    - nalyze_job_fit: Deterministic skill match and gap analysis between resume and job description.
+    - project_list: Discover all indexed student software projects and documents.
+    - project_ask: Answer questions grounded in software project documentation.
+    - project_summary: Generate structured technical summaries of software projects.
+    - project_interview: Generate grounded technical interview questions from project documentation.
+  - Strict parameter validation: Enforces type constraints, string bounds, and allowed choices.
+  - Rejects unknown tools, arbitrary code execution, dynamic imports, eval, or shell commands.
+- **Agent Orchestrator (src/agent_orchestrator.py)**:
+  - plan_task(user_query, context=None): Creates structured execution plans with classification (LEARNING, CAREER, PROJECT, CROSS_DOMAIN, GENERAL) and workflow selection.
+  - execute_plan(plan, context=None): Executes tool calls in dependency order with strict execution bounds ($\le 5$ tool calls) and error containment.
+  - un_agent(user_query, context=None): End-to-end execution returning grounded answers, execution traces, sources, citation verification, and explicit limitations.
+- **Multi-Step Workflows Supported**:
+  - **Workflow A (Personalized Study Planning)**: Assesses learning profile, checks revision topics, and constructs structured multi-day study plans.
+  - **Workflow B (Career & Job Analysis)**: Inspects resume evidence, executes deterministic job fit match, and outlines missing skills.
+  - **Workflow C (Project Interview Preparation)**: Verifies project docs, summarizes technical architecture, and generates grounded interview questions.
+  - **Workflow D (Cross-Domain Assistance)**: Seamlessly combines concept explanations, related projects, and career preparation.
+- **Safety & Observability Controls**:
+  - Maximum 5 tool calls per user query; no unbounded loops.
+  - Prompt injection defense: Treats user input and tool outputs as untrusted data (--- UNTRUSTED DATA ---).
+  - Sensitive argument redaction ([REDACTED]).
+  - Integrated citation verification via erify_citations().
+- **CLI Command**:
+  - python -m src.main agent --query <goal>: Execute multi-step agentic orchestration from the command line.
