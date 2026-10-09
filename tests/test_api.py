@@ -16,13 +16,27 @@ Tests cover:
 import unittest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from src.api import app
+from src.api import app, get_current_user
+from src.auth import User
 from src.agent_orchestrator import AgentResult, ToolExecutionTrace
+
+mock_auth_user = User(
+    id="default_user",
+    username="testuser",
+    created_at="2026-01-01T00:00:00Z",
+    is_active=True,
+)
 
 client = TestClient(app)
 
 
 class TestFastAPIBackend(unittest.TestCase):
+    def setUp(self):
+        app.dependency_overrides[get_current_user] = lambda: mock_auth_user
+
+    def tearDown(self):
+        app.dependency_overrides.clear()
+
     def test_health_check(self):
         response = client.get("/health")
         self.assertEqual(response.status_code, 200)

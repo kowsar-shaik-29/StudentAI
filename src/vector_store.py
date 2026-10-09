@@ -221,6 +221,7 @@ def upsert_chunks(
             "category": chunk.get("category", "other"),
             "subject": chunk.get("subject", "general"),
             "document_type": chunk.get("document_type", "other"),
+            "owner_id": chunk.get("owner_id", "system"),
         }
 
         points.append(PointStruct(id=point_id, vector=emb, payload=payload))

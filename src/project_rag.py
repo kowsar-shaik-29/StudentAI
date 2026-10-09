@@ -37,9 +37,13 @@ CRITICAL RULES:
 """
 
 
-def list_projects(sparse_retriever: Optional[SparseRetriever] = None) -> List[Dict[str, Any]]:
+def list_projects(
+    sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Discovers all indexed projects and their associated documents from the knowledge base.
+    Filters strictly by owner_id if provided.
 
     Returns:
         List of structured project dictionaries:
@@ -57,6 +61,8 @@ def list_projects(sparse_retriever: Optional[SparseRetriever] = None) -> List[Di
     projects_map: Dict[str, Dict[str, Any]] = {}
 
     for chunk in sr.documents.values():
+        if owner_id and chunk.get("owner_id", "system") != owner_id:
+            continue
         if chunk.get("category") != "project" and chunk.get("document_type") != "project_documentation":
             continue
 
@@ -125,6 +131,7 @@ def answer_project_question(
     genai_client: Optional[genai.Client] = None,
     collection_name: Optional[str] = None,
     sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Answers questions about a software project grounded in category="project" documentation.
@@ -137,6 +144,7 @@ def answer_project_question(
         genai_client: Optional GenAI client.
         collection_name: Optional collection name.
         sparse_retriever: Optional SparseRetriever.
+        owner_id: Optional owner ID for user isolation.
 
     Returns:
         Structured response dictionary:
@@ -158,8 +166,8 @@ def answer_project_question(
     active_model = settings.generation_model
     sr = sparse_retriever or get_sparse_retriever()
 
-    # Check available projects
-    avail_projs = list_projects(sparse_retriever=sr)
+    # Check available projects filtered by owner_id
+    avail_projs = list_projects(sparse_retriever=sr, owner_id=owner_id)
 
     # Ambiguity check: if no project_id specified and multiple projects exist
     if not project_id and len(avail_projs) > 1:
@@ -186,7 +194,7 @@ def answer_project_question(
         else:
             selected_doc_id = project_id.strip()
 
-    # 1. Retrieve candidates strictly filtered by category="project"
+    # 1. Retrieve candidates strictly filtered by category="project" and owner_id
     q_client = client or initialize_vector_store()
     try:
         retrieved_chunks = hybrid_search(
@@ -197,6 +205,7 @@ def answer_project_question(
             collection_name=collection_name,
             category="project",
             document_id=selected_doc_id,
+            owner_id=owner_id,
         )
     finally:
         if client is None:
@@ -274,17 +283,24 @@ def answer_project_question(
     }
 
 
-def get_project_all_text(project_id: str, sparse_retriever: Optional[SparseRetriever] = None) -> Dict[str, Any]:
+def get_project_all_text(
+    project_id: str,
+    sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Gathers all documented text and chunks associated with a specific project.
+    Validates ownership against owner_id if supplied.
     """
     sr = sparse_retriever or get_sparse_retriever()
-    avail = list_projects(sparse_retriever=sr)
+    avail = list_projects(sparse_retriever=sr, owner_id=owner_id)
     matched = next((p for p in avail if p["project_id"].lower() == project_id.lower() or p["project_name"].lower() == project_id.lower()), None)
 
     pid_norm = project_id.lower().replace("_", " ")
     matching_chunks = []
     for c in sr.documents.values():
+        if owner_id and c.get("owner_id", "system") != owner_id:
+            continue
         if c.get("category") != "project" and c.get("document_type") != "project_documentation":
             continue
         if matched and (c.get("document_id") in [d["document_id"] for d in matched["documents"]] or c.get("file_name") in matched["filenames"]):
@@ -334,6 +350,7 @@ def summarize_project(
     project_id: str,
     genai_client: Optional[genai.Client] = None,
     sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generates a structured, grounded technical summary of a project from its documentation.
@@ -342,7 +359,7 @@ def summarize_project(
     g_client = genai_client or get_genai_client()
     settings = get_settings()
 
-    proj_data = get_project_all_text(project_id, sparse_retriever=sr)
+    proj_data = get_project_all_text(project_id, sparse_retriever=sr, owner_id=owner_id)
     context_str = proj_data["full_text"]
 
     config = types.GenerateContentConfig(

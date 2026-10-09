@@ -33,10 +33,11 @@ def search(
     subject: Optional[str] = None,
     document_type: Optional[str] = None,
     document_id: Optional[str] = None,
+    owner_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Executes semantic vector search for a natural language user query.
-    Optionally filters by document metadata (category, subject, document_type, document_id)
+    Optionally filters by document metadata (category, subject, document_type, document_id, owner_id)
     and optionally reranks candidates using cross-evaluation relevance scoring.
 
     Args:
@@ -126,6 +127,8 @@ def search(
         conditions.append(FieldCondition(key="document_type", match=MatchValue(value=document_type.strip().lower())))
     if document_id:
         conditions.append(FieldCondition(key="document_id", match=MatchValue(value=document_id.strip())))
+    if owner_id:
+        conditions.append(FieldCondition(key="owner_id", match=MatchValue(value=owner_id.strip())))
 
     query_filter = Filter(must=conditions) if conditions else None
 
@@ -161,6 +164,7 @@ def search(
             "category": payload.get("category", "other"),
             "subject": payload.get("subject", "general"),
             "document_type": payload.get("document_type", "other"),
+            "owner_id": payload.get("owner_id", "system"),
         })
 
     # 9. Apply Reranking if enabled

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Career RAG Module for StudentAI.
 Provides career-scoped question answering and resume-job gap analysis:
 - Strictly scopes retrieval to category="career" (resumes, job descriptions, career docs).
@@ -46,6 +46,7 @@ def answer_career_question(
     genai_client: Optional[genai.Client] = None,
     collection_name: Optional[str] = None,
     sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Answers a career query grounded strictly in category="career" documents.
@@ -59,6 +60,7 @@ def answer_career_question(
         genai_client: Optional pre-authenticated GenAI Client.
         collection_name: Optional Qdrant collection override.
         sparse_retriever: Optional SparseRetriever instance.
+        owner_id: Optional user owner ID for isolation.
 
     Returns:
         Structured response dictionary:
@@ -88,6 +90,7 @@ def answer_career_question(
             category="career",
             document_type=document_type,
             document_id=document_id,
+            owner_id=owner_id,
         )
     finally:
         if client is None:
@@ -147,9 +150,11 @@ def answer_career_question(
 def get_career_document_text(
     document_id: str,
     sparse_retriever: Optional[SparseRetriever] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retrieves full text and chunks for a document from the sparse retriever index.
+    Enforces that the document belongs to owner_id if provided.
 
     Returns:
         {
@@ -169,6 +174,11 @@ def get_career_document_text(
 
     if not matching_chunks:
         raise ValueError(f"Document with ID or name '{document_id}' not found in index.")
+
+    if owner_id:
+        doc_owner = matching_chunks[0].get("owner_id", "system")
+        if doc_owner != owner_id:
+            raise ValueError(f"Access denied: Document '{document_id}' does not belong to authorized user.")
 
     # Sort chunks by chunk_index
     matching_chunks.sort(key=lambda x: x.get("chunk_index", 0))
@@ -193,18 +203,19 @@ def analyze_job_fit(
     job_document_id: str,
     sparse_retriever: Optional[SparseRetriever] = None,
     genai_client: Optional[genai.Client] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Conducts deterministic job fit analysis between a resume and job description.
-    1. Fetches indexed texts for both documents.
+    1. Fetches indexed texts for both documents (validating owner_id).
     2. Extracts skills with page/quote evidence from both documents using Gemini.
     3. Runs deterministic job matching.
     """
     sr = sparse_retriever or get_sparse_retriever()
     g_client = genai_client or get_genai_client()
 
-    resume_data = get_career_document_text(resume_document_id, sparse_retriever=sr)
-    job_data = get_career_document_text(job_document_id, sparse_retriever=sr)
+    resume_data = get_career_document_text(resume_document_id, sparse_retriever=sr, owner_id=owner_id)
+    job_data = get_career_document_text(job_document_id, sparse_retriever=sr, owner_id=owner_id)
 
     # Skill extraction from resume
     resume_skills_res = extract_skills(

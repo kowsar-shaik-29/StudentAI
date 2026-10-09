@@ -210,3 +210,15 @@ export interface DocumentUploadResponse {
   pages: number;
   embeddings: number;
 }
+
+export interface UserResponse {
+  id: string;
+  username: string;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface AuthStatusResponse {
+  user: UserResponse | null;
+  authenticated: boolean;
+}

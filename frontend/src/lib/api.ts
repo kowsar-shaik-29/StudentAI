@@ -10,6 +10,7 @@ import {
   ProjectListResponse,
   ProjectAskResponse,
   DocumentUploadResponse,
+  UserResponse,
 } from "../types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -31,6 +32,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
     const res = await fetch(url, {
       ...options,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(options?.headers || {}),
@@ -62,6 +64,26 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   getHealth: () => request<HealthResponse>("/health"),
+
+  // Authentication
+  register: (username: string, password: string) =>
+    request<UserResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+
+  login: (username: string, password: string) =>
+    request<UserResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+
+  logout: () =>
+    request<{ message: string }>("/api/auth/logout", {
+      method: "POST",
+    }),
+
+  getMe: () => request<UserResponse>("/api/auth/me"),
 
   runAgent: (query: string) =>
     request<AgentRunResponse>("/api/agent/run", {
@@ -126,6 +148,7 @@ export const api = {
     try {
       const res = await fetch(url, {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
 

@@ -107,9 +107,10 @@ class SparseRetriever:
                 "chunk_index": chunk.get("chunk_index", 0),
                 "char_count": chunk.get("char_count", len(chunk.get("text", ""))),
                 "document_id": chunk.get("document_id", ""),
-                "category": chunk.get("category", "other"),
-                "subject": chunk.get("subject", "general"),
-                "document_type": chunk.get("document_type", "other"),
+                "category": chunk.get("category") or chunk.get("metadata", {}).get("category", "other"),
+                "subject": chunk.get("subject") or chunk.get("metadata", {}).get("subject", "general"),
+                "document_type": chunk.get("document_type") or chunk.get("metadata", {}).get("document_type", "other"),
+                "owner_id": chunk.get("owner_id") or chunk.get("metadata", {}).get("owner_id", "system"),
             }
 
             tokens = tokenize(clean_chunk["text"])
@@ -151,6 +152,7 @@ class SparseRetriever:
         subject: Optional[str] = None,
         document_type: Optional[str] = None,
         document_id: Optional[str] = None,
+        owner_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Executes BM25 search over indexed document chunks with optional metadata filtering.
@@ -162,6 +164,7 @@ class SparseRetriever:
             subject: Optional subject filter (e.g. 'database', 'computer_networks')
             document_type: Optional document type filter (e.g. 'notes', 'resume')
             document_id: Optional exact document ID filter
+            owner_id: Optional owner ID filter for user data isolation
         """
         if not query or not query.strip():
             raise ValueError("Query string cannot be empty or whitespace only")
@@ -181,6 +184,7 @@ class SparseRetriever:
         subj_filter = subject.strip().lower().replace(" ", "_") if subject else None
         dtype_filter = document_type.strip().lower() if document_type else None
         doc_id_filter = document_id.strip() if document_id else None
+        owner_filter = owner_id.strip() if owner_id else None
 
         scores: Dict[str, float] = {}
 
@@ -196,7 +200,9 @@ class SparseRetriever:
         for chunk_id, term_freqs in self.doc_term_freqs.items():
             doc_meta = self.documents[chunk_id]
 
-            # Apply metadata filters
+            # Apply metadata & ownership filters
+            if owner_filter and doc_meta.get("owner_id", "system") != owner_filter:
+                continue
             if cat_filter and doc_meta.get("category", "other").lower() != cat_filter:
                 continue
             if subj_filter and doc_meta.get("subject", "general").lower() != subj_filter:
@@ -241,7 +247,9 @@ class SparseRetriever:
                 "category": doc_meta.get("category", "other"),
                 "subject": doc_meta.get("subject", "general"),
                 "document_type": doc_meta.get("document_type", "other"),
+                "owner_id": doc_meta.get("owner_id", "system"),
             })
+
 
         return results
 

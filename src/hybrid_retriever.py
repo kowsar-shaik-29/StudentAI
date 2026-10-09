@@ -111,6 +111,7 @@ def hybrid_search(
     subject: Optional[str] = None,
     document_type: Optional[str] = None,
     document_id: Optional[str] = None,
+    owner_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Executes hybrid search combining dense semantic retrieval and sparse BM25 retrieval.
@@ -178,6 +179,7 @@ def hybrid_search(
         subject=subject,
         document_type=document_type,
         document_id=document_id,
+        owner_id=owner_id,
     )
 
     # 2. Sparse Lexical Retrieval
@@ -189,6 +191,7 @@ def hybrid_search(
         subject=subject,
         document_type=document_type,
         document_id=document_id,
+        owner_id=owner_id,
     )
 
     # 3. Reciprocal Rank Fusion

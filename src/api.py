@@ -26,11 +26,19 @@ import os
 import tempfile
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, status, Query
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, status, Query, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
 from src.config import get_settings
+from src.auth import (
+    User,
+    create_user,
+    authenticate_user,
+    get_user_by_id,
+    create_access_token,
+    verify_access_token,
+)
 from src.agent_orchestrator import run_agent, AgentResult
 from src.learning_rag import answer_learning_question
 from src.recommendation_engine import get_learning_profile, get_learning_recommendations
@@ -68,6 +76,66 @@ ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt", ".markdown"}
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+class UserRegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6, max_length=128)
+
+
+class UserLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    created_at: str
+    is_active: bool
+
+
+# ---------------------------------------------------------------------------
+# Authentication Dependency
+# ---------------------------------------------------------------------------
+
+SESSION_COOKIE_NAME = "studentai_session"
+
+
+async def get_current_user(request: Request) -> User:
+    """
+    Extracts and verifies authentication token from HTTP-only session cookie
+    or 'Authorization: Bearer <token>' header.
+    Raises HTTPException(401) on missing or invalid authentication.
+    """
+    token: Optional[str] = request.cookies.get(SESSION_COOKIE_NAME)
+
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please log in.",
+        )
+
+    payload = verify_access_token(token)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has expired or is invalid. Please log in again.",
+        )
+
+    user = await run_in_threadpool(get_user_by_id, user_id=payload["sub"])
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account not found or deactivated.",
+        )
+
+    return user
 
 
 class AgentRunRequest(BaseModel):
@@ -197,6 +265,10 @@ class UploadDocumentResponse(BaseModel):
 # API Routes
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# API Routes
+# ---------------------------------------------------------------------------
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """Returns application status and version without leaking secrets."""
@@ -206,11 +278,100 @@ async def health_check():
     )
 
 
-@app.post("/api/agent/run", response_model=AgentRunResponse, tags=["Agent"])
-async def run_agent_endpoint(req: AgentRunRequest):
-    """Executes multi-step or single-step agentic orchestration for a user goal."""
+# --- Authentication Endpoints ---
+
+@app.post("/api/auth/register", response_model=UserResponse, tags=["Auth"])
+async def register_endpoint(req: UserRegisterRequest, response: Response):
+    """Registers a new user and issues a signed session cookie."""
     try:
-        res: AgentResult = await run_in_threadpool(run_agent, user_query=req.query)
+        user = await run_in_threadpool(create_user, username=req.username, password=req.password)
+        token = create_access_token(user_id=user.id, username=user.username)
+
+        # Set secure HTTP-only cookie
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=token,
+            httponly=True,
+            samesite="lax",
+            secure=False,  # Set to True in production HTTPS
+            max_age=settings.auth_token_expire_hours * 3600,
+            path="/",
+        )
+        return UserResponse(
+            id=user.id,
+            username=user.username,
+            created_at=user.created_at,
+            is_active=user.is_active,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}",
+        )
+
+
+@app.post("/api/auth/login", response_model=UserResponse, tags=["Auth"])
+async def login_endpoint(req: UserLoginRequest, response: Response):
+    """Authenticates credentials and establishes session."""
+    user = await run_in_threadpool(authenticate_user, username=req.username, password=req.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+        )
+
+    token = create_access_token(user_id=user.id, username=user.username)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=settings.auth_token_expire_hours * 3600,
+        path="/",
+    )
+    return UserResponse(
+        id=user.id,
+        username=user.username,
+        created_at=user.created_at,
+        is_active=user.is_active,
+    )
+
+
+@app.post("/api/auth/logout", tags=["Auth"])
+async def logout_endpoint(response: Response):
+    """Clears session cookie."""
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return {"message": "Logged out successfully."}
+
+
+@app.get("/api/auth/me", response_model=UserResponse, tags=["Auth"])
+async def me_endpoint(current_user: User = Depends(get_current_user)):
+    """Returns profile of currently authenticated user."""
+    return UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        created_at=current_user.created_at,
+        is_active=current_user.is_active,
+    )
+
+
+# --- Protected Domain Workspaces ---
+
+@app.post("/api/agent/run", response_model=AgentRunResponse, tags=["Agent"])
+async def run_agent_endpoint(
+    req: AgentRunRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Executes multi-step or single-step agentic orchestration for authenticated user."""
+    try:
+        context = {"user_id": current_user.id}
+        res: AgentResult = await run_in_threadpool(run_agent, user_query=req.query, context=context)
         traces = [
             ExecutionTraceItem(
                 step=t.step,
@@ -242,15 +403,18 @@ async def run_agent_endpoint(req: AgentRunRequest):
 
 
 @app.post("/api/learning/ask", response_model=LearningAskResponse, tags=["Learning"])
-async def learning_ask_endpoint(req: LearningAskRequest):
-    """Answers an academic question with pedagogical intent classification."""
+async def learning_ask_endpoint(
+    req: LearningAskRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Answers an academic question with user-scoped isolation."""
     try:
         res = await run_in_threadpool(
             answer_learning_question,
             query=req.query,
             top_k=req.top_k,
             intent=req.intent,
-            user_id=req.user_id,
+            user_id=current_user.id,
         )
         return LearningAskResponse(
             intent=res.get("intent", "GENERAL_LEARNING"),
@@ -268,10 +432,12 @@ async def learning_ask_endpoint(req: LearningAskRequest):
 
 
 @app.get("/api/learning/profile", tags=["Learning"])
-async def learning_profile_endpoint(user_id: str = Query("default_user", max_length=100)):
-    """Fetches student learning profile showing weak, strong, and unassessed topics."""
+async def learning_profile_endpoint(
+    current_user: User = Depends(get_current_user),
+):
+    """Fetches authenticated student's learning profile."""
     try:
-        prof = await run_in_threadpool(get_learning_profile, user_id=user_id)
+        prof = await run_in_threadpool(get_learning_profile, user_id=current_user.id)
         return prof
     except Exception as e:
         raise HTTPException(
@@ -282,15 +448,15 @@ async def learning_profile_endpoint(user_id: str = Query("default_user", max_len
 
 @app.get("/api/learning/recommendations", tags=["Learning"])
 async def learning_recommendations_endpoint(
-    user_id: str = Query("default_user", max_length=100),
     topic: Optional[str] = Query(None, max_length=100),
     limit: int = Query(5, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
 ):
-    """Fetches actionable personalized study recommendations and academic sources."""
+    """Fetches personalized study recommendations for authenticated user."""
     try:
         recs = await run_in_threadpool(
             get_learning_recommendations,
-            user_id=user_id,
+            user_id=current_user.id,
             topic=topic,
             max_recommendations=limit,
         )
@@ -303,14 +469,17 @@ async def learning_recommendations_endpoint(
 
 
 @app.post("/api/study-plans", response_model=StudyPlanResponse, tags=["Study Plan"])
-async def study_plan_endpoint(req: StudyPlanRequest):
-    """Generates a structured, multi-day academic study schedule."""
+async def study_plan_endpoint(
+    req: StudyPlanRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a structured, multi-day academic study schedule for authenticated user."""
     try:
         plan_res = await run_in_threadpool(
             create_study_plan,
             subject=req.subject,
             days=req.days,
-            user_id=req.user_id,
+            user_id=current_user.id,
             daily_minutes=req.daily_minutes,
         )
         return StudyPlanResponse(
@@ -334,8 +503,11 @@ async def study_plan_endpoint(req: StudyPlanRequest):
 
 
 @app.post("/api/career/ask", response_model=CareerAskResponse, tags=["Career"])
-async def career_ask_endpoint(req: CareerAskRequest):
-    """Answers a career question grounded strictly in career documents."""
+async def career_ask_endpoint(
+    req: CareerAskRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Answers a career question grounded strictly in authenticated user's career documents."""
     try:
         res = await run_in_threadpool(
             answer_career_question,
@@ -343,6 +515,7 @@ async def career_ask_endpoint(req: CareerAskRequest):
             top_k=req.top_k,
             document_type=req.document_type,
             document_id=req.document_id,
+            owner_id=current_user.id,
         )
         return CareerAskResponse(
             query=res.get("query", req.query),
@@ -357,13 +530,17 @@ async def career_ask_endpoint(req: CareerAskRequest):
 
 
 @app.post("/api/career/job-fit", tags=["Career"])
-async def job_fit_endpoint(req: JobFitRequest):
-    """Conducts deterministic skill matching and gap analysis between resume and job."""
+async def job_fit_endpoint(
+    req: JobFitRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Conducts deterministic skill matching for documents owned by authenticated user."""
     try:
         res = await run_in_threadpool(
             analyze_job_fit,
             resume_document_id=req.resume_id,
             job_document_id=req.job_id,
+            owner_id=current_user.id,
         )
         return res
     except ValueError as e:
@@ -379,10 +556,12 @@ async def job_fit_endpoint(req: JobFitRequest):
 
 
 @app.get("/api/projects", tags=["Projects"])
-async def list_projects_endpoint():
-    """Lists all indexed student software projects and their documentation files."""
+async def list_projects_endpoint(
+    current_user: User = Depends(get_current_user),
+):
+    """Lists indexed student software projects belonging to authenticated user."""
     try:
-        projs = await run_in_threadpool(list_projects)
+        projs = await run_in_threadpool(list_projects, owner_id=current_user.id)
         return {"projects": projs, "total": len(projs)}
     except Exception as e:
         raise HTTPException(
@@ -392,14 +571,18 @@ async def list_projects_endpoint():
 
 
 @app.post("/api/projects/ask", response_model=ProjectAskResponse, tags=["Projects"])
-async def project_ask_endpoint(req: ProjectAskRequest):
-    """Answers a question grounded in software project documentation."""
+async def project_ask_endpoint(
+    req: ProjectAskRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Answers a question grounded in authenticated user's project documentation."""
     try:
         res = await run_in_threadpool(
             answer_project_question,
             query=req.query,
             project_id=req.project_id,
             top_k=req.top_k,
+            owner_id=current_user.id,
         )
         return ProjectAskResponse(
             query=res.get("query", req.query),
@@ -422,10 +605,10 @@ async def upload_document_endpoint(
     category: str = Form("academic"),
     subject: Optional[str] = Form("general"),
     document_type: Optional[str] = Form("notes"),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Safely ingests an uploaded PDF, Markdown, or text document into the knowledge base.
-    Validates file extension, bounds file size (max 10MB), and isolates execution.
+    Safely ingests an uploaded document into the knowledge base, owned by current_user.
     """
     filename = Path(file.filename or "").name
     if not filename:
@@ -454,7 +637,6 @@ async def upload_document_endpoint(
             detail="Uploaded file is empty.",
         )
 
-    # Save to a temporary file for ingestion pipeline
     temp_dir = Path(tempfile.gettempdir()) / "studentai_uploads"
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_file_path = temp_dir / filename
@@ -469,6 +651,7 @@ async def upload_document_endpoint(
             category=category,
             subject=subject,
             document_type=document_type,
+            owner_id=current_user.id,
         )
 
         return UploadDocumentResponse(
@@ -487,9 +670,9 @@ async def upload_document_endpoint(
             detail=f"Document ingestion failed: {str(e)}",
         )
     finally:
-        # Clean up temporary upload file
         if temp_file_path.exists():
             try:
                 temp_file_path.unlink()
             except Exception:
                 pass
+

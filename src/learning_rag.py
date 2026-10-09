@@ -252,6 +252,7 @@ def answer_learning_question(
             sparse_retriever=sparse_retriever,
             collection_name=collection_name,
             category="academic",
+            owner_id=user_id,
         )
     finally:
         if client is None:

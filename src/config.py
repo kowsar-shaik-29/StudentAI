@@ -47,6 +47,11 @@ class Settings:
     app_version: str = "1.0.0"
     cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 
+    # Authentication & User Database
+    user_db_path: Path = BASE_DIR / os.getenv("USER_DB_PATH", "data/users.db")
+    auth_secret_key: str = os.getenv("AUTH_SECRET_KEY", "studentai-dev-secret-change-in-production-key-32b")
+    auth_token_expire_hours: int = int(os.getenv("AUTH_TOKEN_EXPIRE_HOURS", "24"))
+
 
 
 def get_settings() -> Settings:

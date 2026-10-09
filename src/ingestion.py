@@ -42,6 +42,7 @@ def ingest_document(
     category: Optional[str] = None,
     subject: Optional[str] = None,
     document_type: Optional[str] = None,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ingests a single PDF document into the Qdrant vector store.
@@ -57,28 +58,7 @@ def ingest_document(
         category: Optional document category (e.g., 'academic', 'career', 'dsa').
         subject: Optional document subject (e.g., 'computer_networks', 'database').
         document_type: Optional document type (e.g., 'notes', 'resume', 'textbook').
-
-    Returns:
-        Structured statistics dictionary:
-        {
-            "file_name": str,
-            "file_path": str,
-            "document_id": str,
-            "category": str,
-            "subject": str,
-            "document_type": str,
-            "pages": int,
-            "pages_with_text": int,
-            "chunks": int,
-            "embeddings": int,
-            "vectors_stored": int,
-            "collection": str,
-        }
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-        ValueError: If file is not a valid PDF or produces 0 chunks.
-        RuntimeError: If embedding or database storage fails.
+        owner_id: Optional owner ID (defaults to 'system').
     """
     path = Path(file_path).resolve()
     if not path.is_file():
@@ -100,6 +80,7 @@ def ingest_document(
         category=category,
         subject=subject,
         document_type=document_type,
+        owner_id=owner_id,
     )
 
     pages = extract_document(path, include_empty=True)
@@ -111,6 +92,7 @@ def ingest_document(
         p["category"] = doc_meta.category
         p["subject"] = doc_meta.subject
         p["document_type"] = doc_meta.document_type
+        p["owner_id"] = doc_meta.owner_id
 
     # 2. Chunking
     chunks = create_chunks(pages, chunk_size=c_size, overlap=c_overlap)

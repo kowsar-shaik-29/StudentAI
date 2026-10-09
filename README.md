@@ -226,7 +226,8 @@ Step 19 introduces a modular Project RAG subsystem designed for student software
 
 Step 20 enhances retrieval quality, context selection, citation reliability, and benchmark evaluation across all domains:
 - **Conservative Query Rewriting (src/query_rewriter.py)**:
-  - ewrite_query(query, client=None, model=None): Conservatively expands technical acronyms, abbreviations, and informal jargon (e.g., NIC -> Network Interface Card MAC address, ACID -> ACID properties atomicity consistency isolation durability database transactions).
+  - 
+ewrite_query(query, client=None, model=None): Conservatively expands technical acronyms, abbreviations, and informal jargon (e.g., NIC -> Network Interface Card MAC address, ACID -> ACID properties atomicity consistency isolation durability database transactions).
   - **Intent Preservation & Guardrails**: Treats user queries as untrusted data to defend against prompt injection. Preserves user intent strictly without hallucinating technologies.
   - **Fallback Safety**: Gracefully falls back to the original raw query upon JSON decode errors, API errors, or low confidence.
   - **Strictly Opt-in**: Kept optional via --rewrite to prevent extra LLM latency and API costs on standard queries.
@@ -262,7 +263,8 @@ Step 21 introduces a controlled, deterministic orchestration layer that understa
     - learning_ask: Query academic concepts with notes and citations.
     - learning_profile: Fetch student learning profile showing weak, strong, and unassessed topics.
     - learning_recommendations: Fetch actionable next topics to study with grounded academic sources.
-    - evision_topics: View prioritized revision items based on weakness and quiz performance.
+    - 
+evision_topics: View prioritized revision items based on weakness and quiz performance.
     - create_study_plan: Generate deterministic multi-day study schedule.
     - career_ask: Query resumes and job descriptions with grounded citations.
     - nalyze_job_fit: Deterministic skill match and gap analysis between resume and job description.
@@ -275,7 +277,8 @@ Step 21 introduces a controlled, deterministic orchestration layer that understa
 - **Agent Orchestrator (src/agent_orchestrator.py)**:
   - plan_task(user_query, context=None): Creates structured execution plans with classification (LEARNING, CAREER, PROJECT, CROSS_DOMAIN, GENERAL) and workflow selection.
   - execute_plan(plan, context=None): Executes tool calls in dependency order with strict execution bounds ($\le 5$ tool calls) and error containment.
-  - un_agent(user_query, context=None): End-to-end execution returning grounded answers, execution traces, sources, citation verification, and explicit limitations.
+  - 
+un_agent(user_query, context=None): End-to-end execution returning grounded answers, execution traces, sources, citation verification, and explicit limitations.
 - **Multi-Step Workflows Supported**:
   - **Workflow A (Personalized Study Planning)**: Assesses learning profile, checks revision topics, and constructs structured multi-day study plans.
   - **Workflow B (Career & Job Analysis)**: Inspects resume evidence, executes deterministic job fit match, and outlines missing skills.
@@ -296,7 +299,8 @@ Step 21 introduces a controlled, deterministic orchestration layer that understa
 Step 22 exposes StudentAI capabilities as clean, reliable, and testable REST APIs for frontend integration (e.g. Next.js):
 - **Service Endpoints (src/api.py)**:
   - GET /health: Health status and application version without exposing secrets or paths.
-  - POST /api/agent/run: Multi-step and single-step agentic orchestration (un_agent()).
+  - POST /api/agent/run: Multi-step and single-step agentic orchestration (
+un_agent()).
   - POST /api/learning/ask: Academic question answering with intent routing and page citations.
   - GET /api/learning/profile: Student learning analytics profile (weak/strong topics).
   - GET /api/learning/recommendations: Actionable personalized study recommendations.
@@ -307,7 +311,8 @@ Step 22 exposes StudentAI capabilities as clean, reliable, and testable REST API
   - POST /api/projects/ask: Technical QA grounded in software project documentation.
   - POST /api/documents/upload: Safe ingestion for .pdf, .md, and .txt files (bounds size to 10MB, verifies extensions, prevents path traversal).
 - **Architecture & Reliability**:
-  - Pure synchronous AI modules are offloaded to a threadpool via un_in_threadpool, preventing event loop blocking.
+  - Pure synchronous AI modules are offloaded to a threadpool via 
+un_in_threadpool, preventing event loop blocking.
   - Structured request and response validation using Pydantic schemas.
   - Configurable CORS middleware via CORS_ORIGINS environment variable (defaults to http://localhost:3000,http://127.0.0.1:3000).
   - Never leaks API keys, passwords, or raw filesystem paths to API clients.
@@ -358,3 +363,27 @@ cd frontend
 npm run build
 npm start
 `
+
+
+## Authentication & Multi-User Data Isolation (Step 24)
+
+StudentAI incorporates secure multi-tenant data isolation and session authentication:
+
+1. **Authentication Core (src/auth.py)**:
+   - Local SQLite user database (data/users.db) with automatic schema initialization.
+   - Modern password hashing using PBKDF2-HMAC-SHA256 (600,000 iterations, random 16-byte salt).
+   - Signed session tokens using HMAC-SHA256 with timestamped expiration (iat, exp, sub, username).
+   - Secure HTTP-only cookies (studentai_session, SameSite=lax) with Bearer token authorization header fallback.
+
+2. **Multi-User Data Isolation**:
+   - Every document chunk, vector embedding, and sparse token is tagged with owner_id.
+   - Vector Store (Qdrant) queries enforce an owner_id exact match filter condition.
+   - Sparse Retriever (BM25) filters documents by owner_id prior to scoring and scoring aggregation.
+   - Hybrid Retriever propagates owner_id down to both dense search and sparse search.
+   - Domain RAG engines (Career, Learning, Project, Study Planning) restrict access to the authenticated user's records.
+   - Agent tool execution binds the authenticated user ID from context, preventing prompt-injected or planner-forged arguments from accessing another user's resources.
+
+3. **Frontend Integration**:
+   - Dedicated authentication context (rontend/src/context/AuthContext.tsx).
+   - Clean user interfaces for Sign In (/login) and Account Registration (/register).
+   - Responsive user indicator and session sign-out controls in header navigation.

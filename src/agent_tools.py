@@ -61,7 +61,9 @@ def _tool_learning_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
     if intent is not None and intent not in ("EXPLAIN", "SUMMARIZE", "COMPARE", "QUIZ", "EXAM_ANSWER", "GENERAL_LEARNING"):
         raise ToolExecutionError(f"Invalid intent '{intent}'.")
 
-    user_id = args.get("user_id", "default_user")
+    # Enforce authenticated user_id from execution context
+    auth_user_id = context.get("user_id") if context else None
+    user_id = auth_user_id or args.get("user_id", "default_user")
 
     res = answer_learning_question(
         query=query.strip(),
@@ -83,7 +85,8 @@ def _tool_learning_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
 
 
 def _tool_learning_profile(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    user_id = args.get("user_id", "default_user")
+    auth_user_id = context.get("user_id") if context else None
+    user_id = auth_user_id or args.get("user_id", "default_user")
     if not isinstance(user_id, str) or not user_id.strip():
         user_id = "default_user"
 
@@ -103,7 +106,8 @@ def _tool_learning_profile(args: Dict[str, Any], context: Optional[Dict[str, Any
 
 
 def _tool_learning_recommendations(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    user_id = args.get("user_id", "default_user")
+    auth_user_id = context.get("user_id") if context else None
+    user_id = auth_user_id or args.get("user_id", "default_user")
     limit = args.get("limit", 5)
     if not isinstance(limit, int) or limit <= 0 or limit > 50:
         raise ToolExecutionError("Argument 'limit' must be an integer between 1 and 50.")
@@ -126,7 +130,8 @@ def _tool_learning_recommendations(args: Dict[str, Any], context: Optional[Dict[
 
 
 def _tool_revision_topics(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    user_id = args.get("user_id", "default_user")
+    auth_user_id = context.get("user_id") if context else None
+    user_id = auth_user_id or args.get("user_id", "default_user")
     subject = args.get("subject")
     limit = args.get("limit", 5)
     if not isinstance(limit, int) or limit <= 0 or limit > 50:
@@ -160,7 +165,8 @@ def _tool_create_study_plan(args: Dict[str, Any], context: Optional[Dict[str, An
     if not isinstance(daily_minutes, int) or daily_minutes <= 0 or daily_minutes > 1440:
         raise ToolExecutionError("Argument 'daily_minutes' must be an integer between 1 and 1440.")
 
-    user_id = args.get("user_id", "default_user")
+    auth_user_id = context.get("user_id") if context else None
+    user_id = auth_user_id or args.get("user_id", "default_user")
     persist = args.get("persist", True)
 
     plan_res = create_study_plan(
@@ -195,6 +201,7 @@ def _tool_career_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] = N
         raise ToolExecutionError(f"Invalid document_type '{doc_type}'.")
 
     doc_id = args.get("document_id")
+    auth_user_id = context.get("user_id") if context else None
 
     res = answer_career_question(
         query=query.strip(),
@@ -204,6 +211,7 @@ def _tool_career_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] = N
         sparse_retriever=context.get("sparse_retriever") if context else None,
         client=context.get("qdrant_client") if context else None,
         genai_client=context.get("genai_client") if context else None,
+        owner_id=auth_user_id,
     )
     return {
         "query": res.get("query"),
@@ -221,12 +229,19 @@ def _tool_analyze_job_fit(args: Dict[str, Any], context: Optional[Dict[str, Any]
     if not job_id or not isinstance(job_id, str) or not job_id.strip():
         raise ToolExecutionError("Argument 'job_id' must be a non-empty string.")
 
-    res = analyze_job_fit(
-        resume_document_id=resume_id.strip(),
-        job_document_id=job_id.strip(),
-        sparse_retriever=context.get("sparse_retriever") if context else None,
-        genai_client=context.get("genai_client") if context else None,
-    )
+    auth_user_id = context.get("user_id") if context else None
+
+    try:
+        res = analyze_job_fit(
+            resume_document_id=resume_id.strip(),
+            job_document_id=job_id.strip(),
+            sparse_retriever=context.get("sparse_retriever") if context else None,
+            genai_client=context.get("genai_client") if context else None,
+            owner_id=auth_user_id,
+        )
+    except ValueError as e:
+        raise ToolExecutionError(str(e))
+
     return {
         "resume_id": res.get("resume", {}).get("document_id"),
         "job_id": res.get("job", {}).get("document_id"),
@@ -243,7 +258,8 @@ def _tool_analyze_job_fit(args: Dict[str, Any], context: Optional[Dict[str, Any]
 
 def _tool_project_list(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     sr = context.get("sparse_retriever") if context else None
-    projs = list_projects(sparse_retriever=sr)
+    auth_user_id = context.get("user_id") if context else None
+    projs = list_projects(sparse_retriever=sr, owner_id=auth_user_id)
     return {
         "total_projects": len(projs),
         "projects": [
@@ -268,6 +284,8 @@ def _tool_project_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] = 
     if not isinstance(top_k, int) or top_k <= 0 or top_k > 20:
         raise ToolExecutionError("Argument 'top_k' must be an integer between 1 and 20.")
 
+    auth_user_id = context.get("user_id") if context else None
+
     res = answer_project_question(
         query=query.strip(),
         project_id=project_id.strip() if project_id else None,
@@ -275,6 +293,7 @@ def _tool_project_ask(args: Dict[str, Any], context: Optional[Dict[str, Any]] = 
         sparse_retriever=context.get("sparse_retriever") if context else None,
         client=context.get("qdrant_client") if context else None,
         genai_client=context.get("genai_client") if context else None,
+        owner_id=auth_user_id,
     )
     return {
         "query": res.get("query"),
@@ -291,11 +310,17 @@ def _tool_project_summary(args: Dict[str, Any], context: Optional[Dict[str, Any]
     if not project_id or not isinstance(project_id, str) or not project_id.strip():
         raise ToolExecutionError("Argument 'project_id' must be a non-empty string.")
 
-    res = summarize_project(
-        project_id=project_id.strip(),
-        sparse_retriever=context.get("sparse_retriever") if context else None,
-        genai_client=context.get("genai_client") if context else None,
-    )
+    auth_user_id = context.get("user_id") if context else None
+
+    try:
+        res = summarize_project(
+            project_id=project_id.strip(),
+            sparse_retriever=context.get("sparse_retriever") if context else None,
+            genai_client=context.get("genai_client") if context else None,
+            owner_id=auth_user_id,
+        )
+    except ValueError as e:
+        raise ToolExecutionError(str(e))
     return res
 
 
@@ -312,12 +337,15 @@ def _tool_project_interview(args: Dict[str, Any], context: Optional[Dict[str, An
     if difficulty not in ("EASY", "MEDIUM", "HARD", "MIXED"):
         raise ToolExecutionError(f"Invalid difficulty '{difficulty}'.")
 
+    auth_user_id = context.get("user_id") if context else None
+
     res = generate_project_interview_questions(
         project_id=project_id.strip(),
         count=count,
         difficulty=difficulty,
         sparse_retriever=context.get("sparse_retriever") if context else None,
         genai_client=context.get("genai_client") if context else None,
+        owner_id=auth_user_id,
     )
     return {
         "project_id": res.get("project_id"),

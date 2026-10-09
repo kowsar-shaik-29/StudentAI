@@ -64,16 +64,19 @@ class DocumentMetadata:
     document_type: str = "other"
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     document_id: str = ""
+    owner_id: str = "system"
 
     def __post_init__(self):
         # Normalize and validate
         cat = (self.category or "other").strip().lower()
         doc_type = (self.document_type or "other").strip().lower()
         subj = (self.subject or "general").strip().lower().replace(" ", "_")
+        owner = (self.owner_id or "system").strip()
 
         object.__setattr__(self, "category", cat)
         object.__setattr__(self, "document_type", doc_type)
         object.__setattr__(self, "subject", subj)
+        object.__setattr__(self, "owner_id", owner)
 
         if not self.document_id:
             doc_id = generate_document_id(self.file_name, self.file_path)
@@ -91,6 +94,7 @@ def create_document_metadata(
     subject: Optional[str] = None,
     document_type: Optional[str] = None,
     created_at: Optional[str] = None,
+    owner_id: Optional[str] = None,
 ) -> DocumentMetadata:
     """
     Factory helper to construct a validated DocumentMetadata instance.
@@ -116,5 +120,7 @@ def create_document_metadata(
         subject=subject or "general",
         document_type=document_type or "other",
         created_at=created_at or datetime.now(timezone.utc).isoformat(),
+        owner_id=owner_id or "system",
     )
+
 

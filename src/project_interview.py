@@ -1,4 +1,4 @@
-﻿"""
+"""
 Project Interview Preparation Module for StudentAI.
 Generates grounded technical interview questions and evaluation criteria from student project documentation:
 - Supported difficulties: EASY, MEDIUM, HARD, MIXED.
@@ -74,6 +74,7 @@ def generate_project_interview_questions(
     genai_client: Optional[genai.Client] = None,
     sparse_retriever: Optional[SparseRetriever] = None,
     max_retries: int = 2,
+    owner_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generates grounded technical interview questions from a project's documentation.
@@ -85,6 +86,7 @@ def generate_project_interview_questions(
         genai_client: Optional GenAI client.
         sparse_retriever: Optional SparseRetriever.
         max_retries: Retries on transient API errors.
+        owner_id: Optional owner ID for user isolation.
 
     Returns:
         Structured interview question dictionary:
@@ -114,7 +116,7 @@ def generate_project_interview_questions(
 
     # 2. Gather Project Documentation
     try:
-        proj_data = get_project_all_text(project_id, sparse_retriever=sr)
+        proj_data = get_project_all_text(project_id, sparse_retriever=sr, owner_id=owner_id)
     except ValueError as e:
         return {
             "project_id": project_id,
