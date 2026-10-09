@@ -321,3 +321,40 @@ Step 22 exposes StudentAI capabilities as clean, reliable, and testable REST API
   - ReDoc: http://localhost:8000/redoc
 - **Authentication & Multi-User Disclaimer**:
   - This API is designed for local single-user prototyping. In multi-user production deployments, an authentication and authorization layer (e.g. JWT / OAuth2) must be integrated before exposing private documents or shared persistent records.
+
+
+---
+
+## Step 23: Complete Next.js Frontend Application
+
+Step 23 provides a responsive, modern web application built with **Next.js 14 (App Router)**, **TypeScript**, and **Tailwind CSS** that connects to the FastAPI backend (\http://localhost:8000\).
+
+### Features & Workspaces
+- **Overview Dashboard (\/\)**: High-level learning analytics, strength and weakness breakdowns, and actionable personalized study recommendations.
+- **AI Assistant & Orchestrator (\/assistant\)**: Conversational interface connected to \/api/agent/run\ with step-by-step execution traces, workflow classification, and verified document citations.
+- **Learning & Knowledge RAG (\/learning\)**: Grounded academic curriculum QA with intent routing (\concept_explanation\, \quiz_generation\, \debugging\, \
+evision\), page citations, interactive quiz practice, and topic statistics.
+- **Study Planner & Revision (\/planner\)**: Multi-day revision schedule generator parameterized by target subject, day duration, and daily time commitments.
+- **Career RAG & Job Matching (\/career\)**: Deterministic resume vs job description skill alignment analysis, exact/partial/missing skill breakdowns, and transparent ATS limitation disclaimers.
+- **Project RAG & Interview Prep (\/projects\)**: Software project documentation browser and grounded technical interview preparation questions.
+- **Document Manager (\/documents\)**: Drag-and-drop file uploader supporting \.pdf\, \.md\, and \.txt\ up to 10MB with category and document-type tagging.
+- **System Health Monitor**: Live polling indicator of backend FastAPI availability in the top header.
+
+### Running the Frontend
+1. Ensure the FastAPI backend is running on port 8000:
+   `ash
+   uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+   `
+2. Navigate to rontend/ and start the Next.js development server:
+   `ash
+   cd frontend
+   npm run dev
+   `
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Production Build
+`ash
+cd frontend
+npm run build
+npm start
+`

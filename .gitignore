@@ -32,3 +32,10 @@ data/qdrant_storage/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Node and Frontend Build
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+
