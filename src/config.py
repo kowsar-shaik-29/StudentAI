@@ -6,6 +6,7 @@ Loads environment variables from .env and provides sensible defaults.
 import os
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Optional
 from dotenv import load_dotenv
 
 # Base directory of the project
@@ -133,3 +134,34 @@ def require_production_auth_secret() -> str:
                 "The default development key is not permitted."
             )
     return settings.auth_secret_key
+
+
+def is_storage_writable(settings: Optional[Settings] = None) -> bool:
+    """
+    Verifies that all configured storage directories can be created and written to.
+    Returns True only if all critical paths are writable, False otherwise.
+    Does not raise exceptions.
+    """
+    s = settings or get_settings()
+    # List of critical storage directories/files to test
+    paths_to_verify = [
+        s.user_db_path,
+        s.qdrant_storage_path,
+        s.sparse_index_dir,
+        s.learning_events_path,
+        s.study_plans_path,
+        s.uploads_dir,
+    ]
+
+    for p in paths_to_verify:
+        target_dir = p if p.suffix == "" else p.parent
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            # Perform a test write and delete
+            probe_file = target_dir / f".write_probe_{os.getpid()}"
+            probe_file.write_bytes(b"probe")
+            probe_file.unlink(missing_ok=True)
+        except Exception:
+            return False
+
+    return True

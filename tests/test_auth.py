@@ -17,6 +17,7 @@ import os
 import unittest
 import tempfile
 import sqlite3
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
@@ -385,6 +386,32 @@ class TestProductionSecurityAndStorageConfig(unittest.TestCase):
             del os.environ["TEST_UNSET_VAR"]
         default_res = resolve_storage_path("TEST_UNSET_VAR", "data/default_fallback")
         self.assertEqual(default_res, BASE_DIR / "data/default_fallback")
+
+    def test_is_storage_writable_detects_permission_denial(self):
+        """is_storage_writable returns False when any critical directory cannot be created or written."""
+        from src.config import is_storage_writable, get_settings
+
+        # Normal writable directories
+        self.assertTrue(is_storage_writable())
+
+        # Simulate permission denial on directory creation
+        with patch.object(Path, "mkdir", side_effect=PermissionError(13, "Permission denied")):
+            self.assertFalse(is_storage_writable())
+
+    def test_health_check_reports_storage_readiness_accurately(self):
+        """GET /health must reflect actual storage readiness without hardcoding true."""
+        client = TestClient(app)
+
+        # Writable storage returns storage_ready=True
+        resp = client.get("/health")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["storage_ready"])
+
+        # Unwritable storage returns storage_ready=False
+        with patch("src.api.is_storage_writable", return_value=False):
+            resp = client.get("/health")
+            self.assertEqual(resp.status_code, 200)
+            self.assertFalse(resp.json()["storage_ready"])
 
 
 if __name__ == "__main__":

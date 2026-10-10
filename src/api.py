@@ -30,7 +30,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, status, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
-from src.config import get_settings
+from src.config import get_settings, is_storage_writable
 from src.auth import (
     User,
     create_user,
@@ -275,18 +275,13 @@ class UploadDocumentResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
     """Returns application status, version, and readiness without leaking secrets."""
-    storage_ready = True
-    try:
-        # Check that persistent directories can be resolved / created
-        settings.user_db_path.parent.mkdir(parents=True, exist_ok=True)
-        settings.sparse_index_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        storage_ready = False
+    current_settings = get_settings()
+    storage_ready = await run_in_threadpool(is_storage_writable, settings=current_settings)
 
     return HealthResponse(
         status="ok",
-        version=settings.app_version,
-        environment=settings.environment,
+        version=current_settings.app_version,
+        environment=current_settings.environment,
         storage_ready=storage_ready,
     )
 
