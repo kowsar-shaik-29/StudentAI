@@ -398,6 +398,33 @@ class TestProductionSecurityAndStorageConfig(unittest.TestCase):
         with patch.object(Path, "mkdir", side_effect=PermissionError(13, "Permission denied")):
             self.assertFalse(is_storage_writable())
 
+    def test_is_storage_writable_logs_diagnostics_on_failure(self):
+        """is_storage_writable logs a warning when a storage path fails the probe."""
+        from src.config import is_storage_writable
+
+        with self.assertLogs("studentai.storage", level="WARNING") as cm:
+            with patch.object(Path, "mkdir", side_effect=PermissionError(13, "Permission denied")):
+                res = is_storage_writable()
+                self.assertFalse(res)
+                self.assertTrue(any("Storage readiness probe failed" in msg for msg in cm.output))
+                self.assertTrue(any("PermissionError" in msg for msg in cm.output))
+
+    def test_cookie_samesite_sanitization(self):
+        """cookie_samesite strips quotes, whitespace, and falls back to 'lax' if invalid."""
+        from src.config import get_settings
+
+        # Quoted 'none'
+        with patch.dict(os.environ, {"COOKIE_SAMESITE": "'none'"}):
+            self.assertEqual(get_settings().cookie_samesite, "none")
+
+        # Double quoted "strict" with spaces
+        with patch.dict(os.environ, {"COOKIE_SAMESITE": '  "strict"  '}):
+            self.assertEqual(get_settings().cookie_samesite, "strict")
+
+        # Invalid value falls back to 'lax'
+        with patch.dict(os.environ, {"COOKIE_SAMESITE": "invalid_value"}):
+            self.assertEqual(get_settings().cookie_samesite, "lax")
+
     def test_health_check_reports_storage_readiness_accurately(self):
         """GET /health must reflect actual storage readiness without hardcoding true."""
         client = TestClient(app)

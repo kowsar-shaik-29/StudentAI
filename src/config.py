@@ -3,11 +3,14 @@ Configuration module for StudentAI.
 Loads environment variables from .env and provides sensible defaults.
 """
 
+import logging
 import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
+
+logger = logging.getLogger("studentai.storage")
 
 # Base directory of the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -77,6 +80,9 @@ def get_settings() -> Settings:
     env = os.getenv("ENVIRONMENT", "development").lower()
     cookie_sec = True if env == "production" else os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
 
+    raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").strip().strip("'\"").lower()
+    cookie_samesite = raw_samesite if raw_samesite in ("lax", "strict", "none") else "lax"
+
     return Settings(
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         embedding_model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2"),
@@ -97,7 +103,7 @@ def get_settings() -> Settings:
         auth_secret_key=os.getenv("AUTH_SECRET_KEY", DEFAULT_DEV_AUTH_SECRET),
         auth_token_expire_hours=int(os.getenv("AUTH_TOKEN_EXPIRE_HOURS", "24")),
         cookie_secure=cookie_sec,
-        cookie_samesite=os.getenv("COOKIE_SAMESITE", "lax").lower(),
+        cookie_samesite=cookie_samesite,
     )
 
 
@@ -161,7 +167,14 @@ def is_storage_writable(settings: Optional[Settings] = None) -> bool:
             probe_file = target_dir / f".write_probe_{os.getpid()}"
             probe_file.write_bytes(b"probe")
             probe_file.unlink(missing_ok=True)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Storage readiness probe failed for path '%s' (target_dir='%s'): %s: %s",
+                p,
+                target_dir,
+                type(e).__name__,
+                e,
+            )
             return False
 
     return True
