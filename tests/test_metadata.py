@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit Tests for Step 12: Metadata-Aware Knowledge.
 Tests the Document Metadata Model, deterministic document_id generation,
 metadata propagation across chunking and vector storage, and metadata filtering
@@ -90,6 +90,7 @@ class TestMetadata(unittest.TestCase):
                 "category": "academic",
                 "subject": "computer_networks",
                 "document_type": "notes",
+                "owner_id": "doc-owner-123",
             }
         ]
 
@@ -100,6 +101,7 @@ class TestMetadata(unittest.TestCase):
         self.assertEqual(chunk["category"], "academic")
         self.assertEqual(chunk["subject"], "computer_networks")
         self.assertEqual(chunk["document_type"], "notes")
+        self.assertEqual(chunk["owner_id"], "doc-owner-123")
 
     def test_qdrant_payload_and_dense_metadata_filtering(self):
         """Verify that Qdrant stores metadata and filters correctly by category and subject."""
@@ -315,6 +317,93 @@ class TestMetadata(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["chunk_id"], "h_career")
         self.assertEqual(filtered[0]["category"], "career")
+
+    def test_owner_id_propagation_to_qdrant_payload_and_bm25_metadata(self):
+        """Verify that owner_id propagates through create_chunks into Qdrant payload and BM25 metadata."""
+        pages = [
+            {
+                "page_number": 1,
+                "total_pages": 1,
+                "text": "Wind power kinetic energy conversion mechanisms and turbine aerodynamics.",
+                "char_count": 73,
+                "has_text": True,
+                "file_name": "UNIT-II_Wind energy.pdf",
+                "file_path": "data/uploads/UNIT-II_Wind energy.pdf",
+                "document_id": "wind-doc-uuid",
+                "category": "academic",
+                "subject": "general",
+                "document_type": "notes",
+                "owner_id": "usr_wind_student_42",
+            }
+        ]
+
+        # 1. Chunker creates chunk with preserved owner_id
+        chunks = create_chunks(pages, chunk_size=500, overlap=50)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["owner_id"], "usr_wind_student_42")
+
+        # 2. Attach embedding vector and upsert to Qdrant
+        chunks[0]["embedding"] = [0.15] * 768
+        upsert_chunks(self.client, chunks, collection_name=self.collection_name, vector_size=768)
+
+        # 3. Index chunk in BM25
+        sr = SparseRetriever(index_dir=Path(self.temp_dir) / "sparse_wind_test")
+        sr.index_chunks(chunks, auto_save=False)
+
+        # 4. Verify Qdrant payload explicitly contains owner_id
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            limit=10,
+            with_payload=True,
+        )
+        wind_point = next((p for p in points if p.payload.get("file_name") == "UNIT-II_Wind energy.pdf"), None)
+        self.assertIsNotNone(wind_point, "Point must exist in Qdrant")
+        self.assertEqual(wind_point.payload.get("owner_id"), "usr_wind_student_42")
+
+        # 5. Verify BM25 indexed document explicitly contains owner_id
+        bm25_doc = sr.documents.get(chunks[0]["chunk_id"])
+        self.assertIsNotNone(bm25_doc, "Chunk must exist in BM25 documents")
+        self.assertEqual(bm25_doc.get("owner_id"), "usr_wind_student_42")
+
+        # 6. Verify Qdrant dense search retrieves with matching owner_id
+        dense_match = dense_search(
+            query="wind power",
+            top_k=5,
+            client=self.client,
+            collection_name=self.collection_name,
+            query_vector=[0.15] * 768,
+            owner_id="usr_wind_student_42",
+        )
+        self.assertEqual(len(dense_match), 1)
+        self.assertEqual(dense_match[0]["file_name"], "UNIT-II_Wind energy.pdf")
+
+        # 7. Verify Qdrant dense search isolates and excludes non-matching owner_id
+        dense_isolated = dense_search(
+            query="wind power",
+            top_k=5,
+            client=self.client,
+            collection_name=self.collection_name,
+            query_vector=[0.15] * 768,
+            owner_id="different_user",
+        )
+        self.assertEqual(len(dense_isolated), 0)
+
+        # 8. Verify BM25 sparse search retrieves with matching owner_id
+        sparse_match = sr.search(
+            query="wind energy",
+            top_k=5,
+            owner_id="usr_wind_student_42",
+        )
+        self.assertEqual(len(sparse_match), 1)
+        self.assertEqual(sparse_match[0]["file_name"], "UNIT-II_Wind energy.pdf")
+
+        # 9. Verify BM25 sparse search isolates and excludes non-matching owner_id
+        sparse_isolated = sr.search(
+            query="wind energy",
+            top_k=5,
+            owner_id="different_user",
+        )
+        self.assertEqual(len(sparse_isolated), 0)
 
 
 if __name__ == "__main__":

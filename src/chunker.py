@@ -79,6 +79,7 @@ def create_chunks(
             "category": page_doc.get("category", "other"),
             "subject": page_doc.get("subject", "general"),
             "document_type": page_doc.get("document_type", "other"),
+            "owner_id": page_doc.get("owner_id", "system"),
         }
 
         if text_len <= chunk_size:
@@ -107,6 +108,7 @@ def create_chunks(
                 "category": page_doc.get("category", "other"),
                 "subject": page_doc.get("subject", "general"),
                 "document_type": page_doc.get("document_type", "other"),
+                "owner_id": page_doc.get("owner_id", "system"),
             })
 
             chunk_idx += 1

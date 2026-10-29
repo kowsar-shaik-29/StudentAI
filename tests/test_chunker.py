@@ -127,6 +127,7 @@ class TestChunker(unittest.TestCase):
             self.assertIn("file_path", c)
             self.assertIn("chunk_index", c)
             self.assertIn("char_count", c)
+            self.assertIn("owner_id", c)
             self.assertEqual(c["char_count"], len(c["text"]))
 
     def test_page_boundaries_preserved(self):
@@ -158,6 +159,73 @@ class TestChunker(unittest.TestCase):
         original_copy = [dict(p) for p in self.sample_pages]
         _ = create_chunks(self.sample_pages, chunk_size=1000, overlap=200)
         self.assertEqual(self.sample_pages, original_copy)
+
+    def test_owner_id_preservation_single_chunk(self):
+        """Verifies that owner_id is preserved when a page fits into a single chunk."""
+        page = [{
+            "page_number": 1,
+            "total_pages": 1,
+            "file_name": "wind_energy.pdf",
+            "file_path": "wind_energy.pdf",
+            "text": "Wind energy is renewable kinetic power.",
+            "has_text": True,
+            "char_count": 39,
+            "owner_id": "student_user_123",
+        }]
+        chunks = create_chunks(page, chunk_size=1000, overlap=200)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["owner_id"], "student_user_123")
+
+    def test_owner_id_preservation_sliding_window(self):
+        """Verifies that owner_id is preserved across all chunks created by the sliding window."""
+        long_text = "Wind power generation principles and aerodynamic turbine design. " * 30  # ~1950 chars
+        page = [{
+            "page_number": 1,
+            "total_pages": 1,
+            "file_name": "wind_energy_long.pdf",
+            "file_path": "wind_energy_long.pdf",
+            "text": long_text,
+            "has_text": True,
+            "char_count": len(long_text),
+            "owner_id": "student_user_456",
+        }]
+        chunks = create_chunks(page, chunk_size=500, overlap=100)
+        self.assertGreater(len(chunks), 1)
+        for idx, chunk in enumerate(chunks):
+            self.assertEqual(
+                chunk["owner_id"],
+                "student_user_456",
+                f"Chunk index {idx} must preserve owner_id",
+            )
+
+    def test_owner_id_default_fallback_to_system(self):
+        """Verifies that owner_id defaults to 'system' when omitted in page dictionary."""
+        short_page = [{
+            "page_number": 1,
+            "total_pages": 1,
+            "file_name": "no_owner_short.pdf",
+            "file_path": "no_owner_short.pdf",
+            "text": "Short text without owner.",
+            "has_text": True,
+            "char_count": 25,
+        }]
+        long_page = [{
+            "page_number": 1,
+            "total_pages": 1,
+            "file_name": "no_owner_long.pdf",
+            "file_path": "no_owner_long.pdf",
+            "text": "Long text without owner. " * 50,
+            "has_text": True,
+            "char_count": 1250,
+        }]
+        short_chunks = create_chunks(short_page, chunk_size=1000, overlap=200)
+        self.assertEqual(len(short_chunks), 1)
+        self.assertEqual(short_chunks[0]["owner_id"], "system")
+
+        long_chunks = create_chunks(long_page, chunk_size=500, overlap=100)
+        self.assertGreater(len(long_chunks), 1)
+        for chunk in long_chunks:
+            self.assertEqual(chunk["owner_id"], "system")
 
 
 if __name__ == "__main__":
