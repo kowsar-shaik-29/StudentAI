@@ -331,6 +331,81 @@ class TestApiAuthSecurity(unittest.TestCase):
             self.assertIn("Path=/", reg_cookie)
             self.assertIn("Path=/", login_cookie)
 
+    def test_production_sets_samesite_none_and_secure_cookie(self):
+        """In production, login and register set SameSite=None and Secure=True."""
+        mock_user = User(
+            id="usr_prod_cookie",
+            username="prod_user",
+            created_at="2026-01-01T00:00:00Z",
+            is_active=True,
+        )
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "AUTH_SECRET_KEY": "a" * 32}):
+            with patch("src.api.authenticate_user", return_value=mock_user):
+                resp = self.client.post("/api/auth/login", json={"username": "prod_user", "password": "Password123!"})
+                self.assertEqual(resp.status_code, 200)
+                cookie_hdr = resp.headers.get("set-cookie", "")
+                self.assertIn("samesite=none", cookie_hdr.lower())
+                self.assertIn("secure", cookie_hdr.lower())
+                self.assertIn("httponly", cookie_hdr.lower())
+
+    def test_logout_clears_cookie_with_matching_flags(self):
+        """Logout endpoint clears session cookie with matching path, httponly, secure, and samesite."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "production", "AUTH_SECRET_KEY": "a" * 32}):
+            resp = self.client.post("/api/auth/logout")
+            self.assertEqual(resp.status_code, 200)
+            cookie_hdr = resp.headers.get("set-cookie", "")
+            self.assertIn("studentai_session=\"\"", cookie_hdr)
+            self.assertIn("max-age=0", cookie_hdr.lower())
+            self.assertIn("path=/", cookie_hdr.lower())
+            self.assertIn("httponly", cookie_hdr.lower())
+            self.assertIn("secure", cookie_hdr.lower())
+            self.assertIn("samesite=none", cookie_hdr.lower())
+
+    def test_cookie_session_authenticates_requests(self):
+        """Valid session cookie authenticates access to protected endpoints."""
+        test_user = User(
+            id="user_cookie_session",
+            username="session_alice",
+            created_at="2026-01-01T00:00:00Z",
+            is_active=True,
+        )
+        token = create_access_token(user_id=test_user.id, username=test_user.username)
+
+        with patch("src.api.get_user_by_id", return_value=test_user):
+            # Send request with session cookie
+            self.client.cookies.set("studentai_session", token)
+            resp = self.client.get("/api/auth/me")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["username"], "session_alice")
+            self.assertEqual(resp.json()["id"], "user_cookie_session")
+
+    def test_invalid_and_expired_session_cookie_rejected(self):
+        """Invalid or expired session cookie returns 401."""
+        test_user = User(
+            id="user_expired",
+            username="expired_user",
+            created_at="2026-01-01T00:00:00Z",
+            is_active=True,
+        )
+        expired_token = create_access_token(
+            user_id=test_user.id,
+            username=test_user.username,
+            expires_delta_seconds=-3600,
+        )
+
+        with patch("src.api.get_user_by_id", return_value=test_user):
+            # Expired cookie
+            self.client.cookies.set("studentai_session", expired_token)
+            resp = self.client.get("/api/auth/me")
+            self.assertEqual(resp.status_code, 401)
+            self.assertIn("expired or is invalid", resp.json()["detail"])
+
+            # Corrupted cookie
+            self.client.cookies.set("studentai_session", "corrupted.jwt.token")
+            resp = self.client.get("/api/auth/me")
+            self.assertEqual(resp.status_code, 401)
+            self.assertIn("expired or is invalid", resp.json()["detail"])
+
 
 class TestProductionSecurityAndStorageConfig(unittest.TestCase):
     def test_production_rejects_insecure_default_secret(self):
@@ -352,17 +427,51 @@ class TestProductionSecurityAndStorageConfig(unittest.TestCase):
             self.assertEqual(secret, "a" * 32)
 
     def test_production_enforces_secure_cookies(self):
-        """When ENVIRONMENT=production, Settings.cookie_secure must always evaluate to True."""
+        """When ENVIRONMENT=production or SameSite=None, Settings.cookie_secure must always evaluate to True."""
         from src.config import get_settings
 
         with patch.dict(os.environ, {"ENVIRONMENT": "production", "COOKIE_SECURE": "false"}):
             settings = get_settings()
             self.assertTrue(settings.cookie_secure)
+            self.assertEqual(settings.cookie_samesite, "none")
 
-        # In development, respects COOKIE_SECURE=false
+        # In development, default SameSite is 'lax' and respects COOKIE_SECURE=false
         with patch.dict(os.environ, {"ENVIRONMENT": "development", "COOKIE_SECURE": "false"}):
+            # Ensure COOKIE_SAMESITE is not set in env
+            env_dev = {k: v for k, v in os.environ.items() if k != "COOKIE_SAMESITE"}
+            env_dev["ENVIRONMENT"] = "development"
+            env_dev["COOKIE_SECURE"] = "false"
+            with patch.dict(os.environ, env_dev, clear=True):
+                settings = get_settings()
+                self.assertFalse(settings.cookie_secure)
+                self.assertEqual(settings.cookie_samesite, "lax")
+
+        # In development, if COOKIE_SAMESITE is explicitly 'none', Secure=True is enforced
+        with patch.dict(os.environ, {"ENVIRONMENT": "development", "COOKIE_SAMESITE": "none", "COOKIE_SECURE": "false"}):
             settings = get_settings()
-            self.assertFalse(settings.cookie_secure)
+            self.assertTrue(settings.cookie_secure)
+            self.assertEqual(settings.cookie_samesite, "none")
+
+    def test_cookie_samesite_environment_defaults(self):
+        """cookie_samesite defaults to 'none' in production and 'lax' in development."""
+        from src.config import get_settings
+
+        clean_env = {k: v for k, v in os.environ.items() if k != "COOKIE_SAMESITE"}
+
+        # Production default
+        clean_env["ENVIRONMENT"] = "production"
+        clean_env["AUTH_SECRET_KEY"] = "a" * 32
+        with patch.dict(os.environ, clean_env, clear=True):
+            s = get_settings()
+            self.assertEqual(s.cookie_samesite, "none")
+            self.assertTrue(s.cookie_secure)
+
+        # Development default
+        clean_env["ENVIRONMENT"] = "development"
+        with patch.dict(os.environ, clean_env, clear=True):
+            s = get_settings()
+            self.assertEqual(s.cookie_samesite, "lax")
+            self.assertFalse(s.cookie_secure)
 
     def test_storage_path_resolution(self):
         """resolve_storage_path preserves absolute paths and resolves relative paths against BASE_DIR."""

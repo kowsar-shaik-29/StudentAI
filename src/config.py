@@ -78,10 +78,15 @@ class Settings:
 def get_settings() -> Settings:
     """Returns the application settings reflecting current environment variables."""
     env = os.getenv("ENVIRONMENT", "development").lower()
-    cookie_sec = True if env == "production" else os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
+    is_prod = env == "production"
 
-    raw_samesite = os.getenv("COOKIE_SAMESITE", "lax").strip().strip("'\"").lower()
-    cookie_samesite = raw_samesite if raw_samesite in ("lax", "strict", "none") else "lax"
+    # Default SameSite is 'none' for production (cross-site Vercel-to-Render) and 'lax' for development
+    default_samesite = "none" if is_prod else "lax"
+    raw_samesite = os.getenv("COOKIE_SAMESITE", default_samesite).strip().strip("'\"").lower()
+    cookie_samesite = raw_samesite if raw_samesite in ("lax", "strict", "none") else default_samesite
+
+    # Secure=True is strictly enforced in production or whenever SameSite=None (per browser standards)
+    cookie_sec = True if (is_prod or cookie_samesite == "none") else os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
 
     return Settings(
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),

@@ -292,6 +292,7 @@ async def health_check():
 async def register_endpoint(req: UserRegisterRequest, response: Response):
     """Registers a new user and issues a signed session cookie."""
     try:
+        current_settings = get_settings()
         user = await run_in_threadpool(create_user, username=req.username, password=req.password)
         token = create_access_token(user_id=user.id, username=user.username)
 
@@ -300,9 +301,9 @@ async def register_endpoint(req: UserRegisterRequest, response: Response):
             key=SESSION_COOKIE_NAME,
             value=token,
             httponly=True,
-            samesite=settings.cookie_samesite,
-            secure=settings.cookie_secure,
-            max_age=settings.auth_token_expire_hours * 3600,
+            samesite=current_settings.cookie_samesite,
+            secure=current_settings.cookie_secure,
+            max_age=current_settings.auth_token_expire_hours * 3600,
             path="/",
         )
         return UserResponse(
@@ -333,14 +334,15 @@ async def login_endpoint(req: UserLoginRequest, response: Response):
             detail="Invalid username or password.",
         )
 
+    current_settings = get_settings()
     token = create_access_token(user_id=user.id, username=user.username)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
-        samesite=settings.cookie_samesite,
-        secure=settings.cookie_secure,
-        max_age=settings.auth_token_expire_hours * 3600,
+        samesite=current_settings.cookie_samesite,
+        secure=current_settings.cookie_secure,
+        max_age=current_settings.auth_token_expire_hours * 3600,
         path="/",
     )
     return UserResponse(
@@ -354,12 +356,13 @@ async def login_endpoint(req: UserLoginRequest, response: Response):
 @app.post("/api/auth/logout", tags=["Auth"])
 async def logout_endpoint(response: Response):
     """Clears session cookie."""
+    current_settings = get_settings()
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
         path="/",
         httponly=True,
-        samesite=settings.cookie_samesite,
-        secure=settings.cookie_secure,
+        samesite=current_settings.cookie_samesite,
+        secure=current_settings.cookie_secure,
     )
     return {"message": "Logged out successfully."}
 
